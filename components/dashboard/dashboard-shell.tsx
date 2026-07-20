@@ -1,20 +1,31 @@
 import type { Profile } from "../../lib/auth/get-profile";
 import type { OrganizerEventGroups } from "../../lib/events/get-organizer-events";
+import type { EventStaffAssignment } from "../../lib/events/get-organizer-event-staff";
 import type { TicketWithEvent } from "../../lib/tickets/get-ticket";
 import { AdminDashboard } from "./admin-dashboard";
 import { ClientDashboard } from "./client-dashboard";
 import { OrganizerDashboard } from "./organizer-dashboard";
 import { StaffDashboard } from "./staff-dashboard";
 
+type StaffFeedback = {
+  eventId?: string;
+  message?: string;
+  error?: string;
+};
+
 type DashboardShellProps = {
   profile: Profile;
   organizerEventGroups: OrganizerEventGroups;
+  organizerStaffAssignments?: EventStaffAssignment[];
+  staffFeedback?: StaffFeedback;
   clientTickets?: TicketWithEvent[];
 };
 
 export function DashboardShell({
   profile,
   organizerEventGroups,
+  organizerStaffAssignments = [],
+  staffFeedback,
   clientTickets = [],
 }: DashboardShellProps) {
   switch (profile.role) {
@@ -27,6 +38,8 @@ export function DashboardShell({
           profile={profile}
           upcomingEvents={organizerEventGroups.upcomingEvents}
           pastEvents={organizerEventGroups.pastEvents}
+          staffAssignments={organizerStaffAssignments}
+          staffFeedback={staffFeedback}
         />
       );
 

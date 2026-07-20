@@ -1,11 +1,21 @@
 import Link from "next/link";
+import { addEventStaffAction } from "../../lib/actions/event-staff";
 import type { Profile } from "../../lib/auth/get-profile";
 import type { OrganizerEvent } from "../../lib/events/get-organizer-events";
+import type { EventStaffAssignment } from "../../lib/events/get-organizer-event-staff";
+
+type StaffFeedback = {
+  eventId?: string;
+  message?: string;
+  error?: string;
+};
 
 type OrganizerDashboardProps = {
   profile: Profile;
   upcomingEvents: OrganizerEvent[];
   pastEvents: OrganizerEvent[];
+  staffAssignments: EventStaffAssignment[];
+  staffFeedback?: StaffFeedback;
 };
 
 function formatEventDate(value: string) {
@@ -15,8 +25,21 @@ function formatEventDate(value: string) {
   }).format(new Date(value));
 }
 
-function EventCard({ event }: { event: OrganizerEvent }) {
+function EventCard({
+  event,
+  staffAssignments,
+  staffFeedback,
+}: {
+  event: OrganizerEvent;
+  staffAssignments: EventStaffAssignment[];
+  staffFeedback?: StaffFeedback;
+}) {
   const publicPath = event.slug ? `/events/${event.slug}` : null;
+  const eventStaff = staffAssignments.filter(
+    (assignment) => assignment.event_id === event.id
+  );
+
+  const showFeedback = staffFeedback?.eventId === event.id;
 
   return (
     <article className="rounded-lg border p-4">
@@ -64,6 +87,59 @@ function EventCard({ event }: { event: OrganizerEvent }) {
           {publicPath}
         </p>
       ) : null}
+
+      <div className="mt-5 rounded-md border border-dashed p-4">
+        <h5 className="font-medium">Event staff</h5>
+
+        {eventStaff.length > 0 ? (
+          <div className="mt-3 grid gap-2">
+            {eventStaff.map((assignment) => (
+              <p
+                key={`${assignment.event_id}-${assignment.staff_user_id}`}
+                className="text-sm text-gray-700"
+              >
+                Staff added:{" "}
+                <span className="font-medium">{assignment.staff_email}</span>
+              </p>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-gray-600">
+            No staff assigned yet.
+          </p>
+        )}
+
+        <form action={addEventStaffAction} className="mt-4 flex flex-col gap-3 md:flex-row">
+          <input type="hidden" name="event_id" value={event.id} />
+
+          <input
+            name="staff_email"
+            type="email"
+            required
+            placeholder="event.staff@example.com"
+            className="min-w-0 flex-1 rounded-md border px-3 py-2 text-sm"
+          />
+
+          <button
+            type="submit"
+            className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white"
+          >
+            Add staff for this event
+          </button>
+        </form>
+
+        {showFeedback && staffFeedback?.message ? (
+          <p className="mt-3 rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700">
+            {staffFeedback.message}
+          </p>
+        ) : null}
+
+        {showFeedback && staffFeedback?.error ? (
+          <p className="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {staffFeedback.error}
+          </p>
+        ) : null}
+      </div>
     </article>
   );
 }
@@ -72,6 +148,8 @@ export function OrganizerDashboard({
   profile,
   upcomingEvents,
   pastEvents,
+  staffAssignments,
+  staffFeedback,
 }: OrganizerDashboardProps) {
   return (
     <section className="rounded-lg border p-6">
@@ -98,7 +176,12 @@ export function OrganizerDashboard({
         {upcomingEvents.length > 0 ? (
           <div className="mt-4 grid gap-4">
             {upcomingEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
+              <EventCard
+                key={event.id}
+                event={event}
+                staffAssignments={staffAssignments}
+                staffFeedback={staffFeedback}
+              />
             ))}
           </div>
         ) : (
@@ -114,7 +197,12 @@ export function OrganizerDashboard({
         {pastEvents.length > 0 ? (
           <div className="mt-4 grid gap-4">
             {pastEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
+              <EventCard
+                key={event.id}
+                event={event}
+                staffAssignments={staffAssignments}
+                staffFeedback={staffFeedback}
+              />
             ))}
           </div>
         ) : (

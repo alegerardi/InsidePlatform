@@ -5,6 +5,7 @@ import {
   getOrganizerEventGroups,
   type OrganizerEventGroups,
 } from "../../lib/events/get-organizer-events";
+import { getOrganizerEventStaffAssignments } from "../../lib/events/get-organizer-event-staff";
 import { getClientTickets } from "../../lib/tickets/get-client-tickets";
 
 const emptyOrganizerEventGroups: OrganizerEventGroups = {
@@ -12,7 +13,19 @@ const emptyOrganizerEventGroups: OrganizerEventGroups = {
   pastEvents: [],
 };
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams?: Promise<{
+    staffEventId?: string;
+    staffMessage?: string;
+    staffError?: string;
+  }>;
+};
+
+export default async function DashboardPage({
+  searchParams,
+}: DashboardPageProps) {
+  const query = await searchParams;
+
   const user = await requireUser("/dashboard");
   const profile = await getProfile(user.id);
 
@@ -33,6 +46,11 @@ export default async function DashboardPage() {
       ? await getOrganizerEventGroups(profile.id)
       : emptyOrganizerEventGroups;
 
+  const organizerStaffAssignments =
+    profile.role === "event_organizer"
+      ? await getOrganizerEventStaffAssignments()
+      : [];
+
   const clientTickets =
     profile.role === "client" ? await getClientTickets(profile.id) : [];
 
@@ -51,6 +69,12 @@ export default async function DashboardPage() {
       <DashboardShell
         profile={profile}
         organizerEventGroups={organizerEventGroups}
+        organizerStaffAssignments={organizerStaffAssignments}
+        staffFeedback={{
+          eventId: query?.staffEventId,
+          message: query?.staffMessage,
+          error: query?.staffError,
+        }}
         clientTickets={clientTickets}
       />
     </main>
