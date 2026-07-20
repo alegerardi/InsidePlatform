@@ -1,6 +1,7 @@
 import { DashboardShell } from "../../components/dashboard/dashboard-shell";
 import { getProfile } from "../../lib/auth/get-profile";
 import { requireUser } from "../../lib/auth/require-user";
+import { getOrganizerEvents } from "../../lib/events/get-organizer-events";
 
 export default async function DashboardPage() {
   const user = await requireUser("/dashboard");
@@ -18,13 +19,16 @@ export default async function DashboardPage() {
     );
   }
 
+  const organizerEvents =
+    profile.role === "event_organizer"
+      ? await getOrganizerEvents(profile.id)
+      : [];
+
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="mt-2 text-gray-600">
-          Role-aware dashboard container.
-        </p>
+        <p className="mt-2 text-gray-600">Role-aware dashboard container.</p>
       </div>
 
       <section className="mb-8 rounded-lg border bg-gray-50 p-4">
@@ -32,7 +36,7 @@ export default async function DashboardPage() {
         <p className="font-semibold">{profile.role}</p>
       </section>
 
-      <DashboardShell profile={profile} />
+      <DashboardShell profile={profile} organizerEvents={organizerEvents} />
     </main>
   );
 }

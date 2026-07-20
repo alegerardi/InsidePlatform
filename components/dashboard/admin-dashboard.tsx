@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Profile } from "../../lib/auth/get-profile";
 
 type AdminDashboardProps = {
@@ -19,6 +20,13 @@ export function AdminDashboard({ profile }: AdminDashboardProps) {
           Global users, events, tickets, check-ins, and platform statistics will
           appear here in the admin statistics layer.
         </p>
+
+        <Link
+          href="/events/new"
+          className="mt-4 inline-flex rounded-md bg-black px-4 py-2 text-sm font-medium text-white"
+        >
+          Create event
+        </Link>
       </div>
     </section>
   );
