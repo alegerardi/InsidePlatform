@@ -16,6 +16,11 @@ export type OrganizerEvent = {
   updated_at: string;
 };
 
+export type OrganizerEventGroups = {
+  upcomingEvents: OrganizerEvent[];
+  pastEvents: OrganizerEvent[];
+};
+
 export async function getOrganizerEvents(organizerId: string) {
   const supabase = await createClient();
 
@@ -32,4 +37,36 @@ export async function getOrganizerEvents(organizerId: string) {
   }
 
   return data as OrganizerEvent[];
+}
+
+export async function getOrganizerEventGroups(
+  organizerId: string
+): Promise<OrganizerEventGroups> {
+  const events = await getOrganizerEvents(organizerId);
+  const nowMs = Date.now();
+
+  const upcomingEvents = events.filter((event) => {
+    const startsAt = new Date(event.starts_at).getTime();
+
+    return (
+      startsAt >= nowMs &&
+      event.status !== "completed" &&
+      event.status !== "cancelled"
+    );
+  });
+
+  const pastEvents = events.filter((event) => {
+    const startsAt = new Date(event.starts_at).getTime();
+
+    return (
+      startsAt < nowMs ||
+      event.status === "completed" ||
+      event.status === "cancelled"
+    );
+  });
+
+  return {
+    upcomingEvents,
+    pastEvents,
+  };
 }

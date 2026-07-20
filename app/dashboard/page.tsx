@@ -1,7 +1,16 @@
 import { DashboardShell } from "../../components/dashboard/dashboard-shell";
 import { getProfile } from "../../lib/auth/get-profile";
 import { requireUser } from "../../lib/auth/require-user";
-import { getOrganizerEvents } from "../../lib/events/get-organizer-events";
+import {
+  getOrganizerEventGroups,
+  type OrganizerEventGroups,
+} from "../../lib/events/get-organizer-events";
+import { getClientTickets } from "../../lib/tickets/get-client-tickets";
+
+const emptyOrganizerEventGroups: OrganizerEventGroups = {
+  upcomingEvents: [],
+  pastEvents: [],
+};
 
 export default async function DashboardPage() {
   const user = await requireUser("/dashboard");
@@ -19,10 +28,13 @@ export default async function DashboardPage() {
     );
   }
 
-  const organizerEvents =
+  const organizerEventGroups =
     profile.role === "event_organizer"
-      ? await getOrganizerEvents(profile.id)
-      : [];
+      ? await getOrganizerEventGroups(profile.id)
+      : emptyOrganizerEventGroups;
+
+  const clientTickets =
+    profile.role === "client" ? await getClientTickets(profile.id) : [];
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
@@ -36,7 +48,11 @@ export default async function DashboardPage() {
         <p className="font-semibold">{profile.role}</p>
       </section>
 
-      <DashboardShell profile={profile} organizerEvents={organizerEvents} />
+      <DashboardShell
+        profile={profile}
+        organizerEventGroups={organizerEventGroups}
+        clientTickets={clientTickets}
+      />
     </main>
   );
 }

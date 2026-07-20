@@ -1,11 +1,18 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { ClaimTicketForm } from "../../../components/tickets/claim-ticket-form";
+import { getUser } from "../../../lib/auth/get-user";
 import { getPublicEventBySlug } from "../../../lib/events/get-event";
+import { getUserTicketForEvent } from "../../../lib/tickets/get-user-ticket-for-event";
 
 type PublicEventPageProps = {
   params: Promise<{
     slug: string;
+  }>;
+  searchParams?: Promise<{
+    error?: string;
+    message?: string;
   }>;
 };
 
@@ -25,13 +32,22 @@ async function getBaseUrl() {
   return `${protocol}://${host}`;
 }
 
-export default async function PublicEventPage({ params }: PublicEventPageProps) {
+export default async function PublicEventPage({
+  params,
+  searchParams,
+}: PublicEventPageProps) {
   const { slug } = await params;
+  const query = await searchParams;
   const event = await getPublicEventBySlug(slug);
 
   if (!event) {
     notFound();
   }
+
+  const user = await getUser();
+  const existingTicket = user
+    ? await getUserTicketForEvent(event.id, user.id)
+    : null;
 
   const baseUrl = await getBaseUrl();
   const eventPath = `/events/${event.slug}`;
@@ -91,15 +107,17 @@ export default async function PublicEventPage({ params }: PublicEventPageProps) 
           </p>
         </div>
 
-        <div className="mt-8 flex flex-wrap gap-4">
-          <button
-            type="button"
-            disabled
-            className="rounded-md bg-gray-300 px-5 py-3 font-medium text-gray-600"
-          >
-            Claim ticket — next layer
-          </button>
+        <div className="mt-8">
+          <ClaimTicketForm
+            eventId={event.id}
+            eventSlug={event.slug ?? slug}
+            existingTicketId={existingTicket?.id}
+            error={query?.error}
+            message={query?.message}
+          />
+        </div>
 
+        <div className="mt-8">
           <Link href="/dashboard" className="rounded-md border px-5 py-3 font-medium">
             Go to dashboard
           </Link>

@@ -4,7 +4,8 @@ import type { OrganizerEvent } from "../../lib/events/get-organizer-events";
 
 type OrganizerDashboardProps = {
   profile: Profile;
-  events: OrganizerEvent[];
+  upcomingEvents: OrganizerEvent[];
+  pastEvents: OrganizerEvent[];
 };
 
 function formatEventDate(value: string) {
@@ -69,30 +70,9 @@ function EventCard({ event }: { event: OrganizerEvent }) {
 
 export function OrganizerDashboard({
   profile,
-  events,
+  upcomingEvents,
+  pastEvents,
 }: OrganizerDashboardProps) {
-  const now = Date.now();
-
-  const upcomingEvents = events.filter((event) => {
-    const startsAt = new Date(event.starts_at).getTime();
-
-    return (
-      startsAt >= now &&
-      event.status !== "completed" &&
-      event.status !== "cancelled"
-    );
-  });
-
-  const pastEvents = events.filter((event) => {
-    const startsAt = new Date(event.starts_at).getTime();
-
-    return (
-      startsAt < now ||
-      event.status === "completed" ||
-      event.status === "cancelled"
-    );
-  });
-
   return (
     <section className="rounded-lg border p-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
