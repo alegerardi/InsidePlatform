@@ -7,6 +7,7 @@ import {
 } from "../../lib/events/get-organizer-events";
 import { getOrganizerEventStaffAssignments } from "../../lib/events/get-organizer-event-staff";
 import { getClientTickets } from "../../lib/tickets/get-client-tickets";
+import { getStaffAssignedEvents } from "../../lib/staff/get-staff-events";
 
 const emptyOrganizerEventGroups: OrganizerEventGroups = {
   upcomingEvents: [],
@@ -54,6 +55,9 @@ export default async function DashboardPage({
   const clientTickets =
     profile.role === "client" ? await getClientTickets(profile.id) : [];
 
+  const staffAssignedEvents =
+  profile.role === "event_staff" ? await getStaffAssignedEvents() : [];
+
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
       <div className="mb-8">
@@ -76,6 +80,7 @@ export default async function DashboardPage({
           error: query?.staffError,
         }}
         clientTickets={clientTickets}
+        staffAssignedEvents={staffAssignedEvents}
       />
     </main>
   );

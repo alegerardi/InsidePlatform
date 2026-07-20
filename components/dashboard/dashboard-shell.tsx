@@ -1,6 +1,7 @@
 import type { Profile } from "../../lib/auth/get-profile";
 import type { OrganizerEventGroups } from "../../lib/events/get-organizer-events";
 import type { EventStaffAssignment } from "../../lib/events/get-organizer-event-staff";
+import type { StaffAssignedEvent } from "../../lib/staff/get-staff-events";
 import type { TicketWithEvent } from "../../lib/tickets/get-ticket";
 import { AdminDashboard } from "./admin-dashboard";
 import { ClientDashboard } from "./client-dashboard";
@@ -19,6 +20,7 @@ type DashboardShellProps = {
   organizerStaffAssignments?: EventStaffAssignment[];
   staffFeedback?: StaffFeedback;
   clientTickets?: TicketWithEvent[];
+  staffAssignedEvents?: StaffAssignedEvent[];
 };
 
 export function DashboardShell({
@@ -27,6 +29,7 @@ export function DashboardShell({
   organizerStaffAssignments = [],
   staffFeedback,
   clientTickets = [],
+  staffAssignedEvents = [],
 }: DashboardShellProps) {
   switch (profile.role) {
     case "client":
@@ -44,7 +47,7 @@ export function DashboardShell({
       );
 
     case "event_staff":
-      return <StaffDashboard profile={profile} />;
+      return <StaffDashboard profile={profile} events={staffAssignedEvents} />;
 
     case "admin":
       return <AdminDashboard profile={profile} />;
