@@ -22,6 +22,10 @@ export type TicketWithEvent = {
   id: string;
   event_id: string;
   user_id: string;
+  ticket_type_id: string | null;
+  ticket_type_title_snapshot: string | null;
+  ticket_price_cents_snapshot: number;
+  ticket_currency_snapshot: string;
   ticket_code: string;
   qr_token: string;
   status: TicketStatus;
@@ -56,6 +60,10 @@ export async function getTicketById(ticketId: string) {
       id,
       event_id,
       user_id,
+      ticket_type_id,
+      ticket_type_title_snapshot,
+      ticket_price_cents_snapshot,
+      ticket_currency_snapshot,
       ticket_code,
       qr_token,
       status,

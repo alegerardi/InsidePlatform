@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { addEventStaffAction } from "../../lib/actions/event-staff";
 import type { Profile } from "../../lib/auth/get-profile";
-import type { OrganizerEvent } from "../../lib/events/get-organizer-events";
 import type { EventStaffAssignment } from "../../lib/events/get-organizer-event-staff";
+import type { OrganizerEvent } from "../../lib/events/get-organizer-events";
 
 type StaffFeedback = {
   eventId?: string;
@@ -29,12 +29,16 @@ function EventCard({
   event,
   staffAssignments,
   staffFeedback,
+  canEdit,
 }: {
   event: OrganizerEvent;
   staffAssignments: EventStaffAssignment[];
   staffFeedback?: StaffFeedback;
+  canEdit: boolean;
 }) {
   const publicPath = event.slug ? `/events/${event.slug}` : null;
+  const editPath = event.slug ? `/events/${event.slug}/edit` : null;
+
   const eventStaff = staffAssignments.filter(
     (assignment) => assignment.event_id === event.id
   );
@@ -70,16 +74,27 @@ function EventCard({
           </div>
         </div>
 
-        {publicPath ? (
-          <Link
-            href={publicPath}
-            className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white"
-          >
-            Open public page
-          </Link>
-        ) : (
-          <span className="text-sm text-gray-500">No public link</span>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {publicPath ? (
+            <Link
+              href={publicPath}
+              className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white"
+            >
+              Open public page
+            </Link>
+          ) : (
+            <span className="text-sm text-gray-500">No public link</span>
+          )}
+
+          {canEdit && editPath ? (
+            <Link
+              href={editPath}
+              className="rounded-md border px-4 py-2 text-sm font-medium"
+            >
+              Edit event
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {publicPath ? (
@@ -104,12 +119,13 @@ function EventCard({
             ))}
           </div>
         ) : (
-          <p className="mt-2 text-sm text-gray-600">
-            No staff assigned yet.
-          </p>
+          <p className="mt-2 text-sm text-gray-600">No staff assigned yet.</p>
         )}
 
-        <form action={addEventStaffAction} className="mt-4 flex flex-col gap-3 md:flex-row">
+        <form
+          action={addEventStaffAction}
+          className="mt-4 flex flex-col gap-3 md:flex-row"
+        >
           <input type="hidden" name="event_id" value={event.id} />
 
           <input
@@ -181,6 +197,7 @@ export function OrganizerDashboard({
                 event={event}
                 staffAssignments={staffAssignments}
                 staffFeedback={staffFeedback}
+                canEdit={true}
               />
             ))}
           </div>
@@ -202,6 +219,7 @@ export function OrganizerDashboard({
                 event={event}
                 staffAssignments={staffAssignments}
                 staffFeedback={staffFeedback}
+                canEdit={false}
               />
             ))}
           </div>

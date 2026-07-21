@@ -18,6 +18,12 @@ function formatEventDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatPrice(priceCents: number, currency: string) {
+  return new Intl.NumberFormat("en", {
+    style: "currency",
+    currency,
+  }).format(priceCents / 100);
+}
 
 export default async function TicketPage({ params }: TicketPageProps) {
   await requireUser("/dashboard");
@@ -50,6 +56,23 @@ export default async function TicketPage({ params }: TicketPageProps) {
                 <dt className="text-sm text-gray-500">Ticket code</dt>
                 <dd className="font-mono text-2xl font-semibold">
                   {ticket.ticket_code}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-sm text-gray-500">Ticket type</dt>
+                <dd className="font-medium">
+                  {ticket.ticket_type_title_snapshot ?? "General Admission"}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-sm text-gray-500">Ticket price</dt>
+                <dd className="font-medium">
+                  {formatPrice(
+                    ticket.ticket_price_cents_snapshot,
+                    ticket.ticket_currency_snapshot
+                  )}
                 </dd>
               </div>
 

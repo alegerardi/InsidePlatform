@@ -16,6 +16,10 @@ type ClaimTicketResponse = {
     | "error";
   message: string;
   ticket_id?: string;
+  ticket_type_id?: string;
+  ticket_type_title?: string;
+  ticket_price_cents?: number;
+  ticket_currency?: string;
   debug_id?: string;
 };
 
@@ -44,6 +48,7 @@ function createDebugId() {
 export async function claimTicketAction(formData: FormData) {
   const eventId = getString(formData, "event_id");
   const eventSlug = getString(formData, "event_slug");
+  const ticketTypeId = getString(formData, "ticket_type_id");
 
   if (!eventId || !eventSlug) {
     redirect("/dashboard");
@@ -55,10 +60,19 @@ export async function claimTicketAction(formData: FormData) {
     redirect(`/login?next=${encodeURIComponent(`/events/${eventSlug}`)}`);
   }
 
+  if (!ticketTypeId) {
+    redirectToEventWithMessage(
+      eventSlug,
+      "error",
+      "Choose a ticket type before claiming your ticket."
+    );
+  }
+
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("claim_ticket", {
+  const { data, error } = await supabase.rpc("claim_ticket_for_type", {
     target_event_id: eventId,
+    target_ticket_type_id: ticketTypeId,
   });
 
   if (error) {
@@ -69,6 +83,7 @@ export async function claimTicketAction(formData: FormData) {
       action: "ticket_claim",
       eventId,
       eventSlug,
+      ticketTypeId,
       userId: user.id,
       errorCode: error.code,
       errorMessage: error.message,
@@ -92,6 +107,7 @@ export async function claimTicketAction(formData: FormData) {
       action: "ticket_claim",
       eventId,
       eventSlug,
+      ticketTypeId,
       userId: user.id,
       timestamp: new Date().toISOString(),
     });
@@ -117,6 +133,7 @@ export async function claimTicketAction(formData: FormData) {
       action: "ticket_claim",
       eventId,
       eventSlug,
+      ticketTypeId,
       userId: user.id,
       result: result.result,
       message: result.message,
@@ -125,13 +142,13 @@ export async function claimTicketAction(formData: FormData) {
   }
 
   const safeMessage =
-  result.result === "error" && result.debug_id
-    ? `We could not claim your ticket. Please try again. Reference: ${result.debug_id}`
-    : result.message;
+    result.result === "error" && result.debug_id
+      ? `${result.message} Reference: ${result.debug_id}`
+      : result.message;
 
-    redirectToEventWithMessage(
+  redirectToEventWithMessage(
     eventSlug,
     result.success ? "message" : "error",
     safeMessage
-    );
+  );
 }

@@ -3,8 +3,17 @@
 import { redirect } from "next/navigation";
 import { getProfile } from "../auth/get-profile";
 import { requireUser } from "../auth/require-user";
-import { createClient } from "../supabase/server";
 import { randomSlugSuffix, slugify } from "../events/slugify";
+import { createClient } from "../supabase/server";
+
+type ParsedTicketType = {
+  title: string;
+  description: string | null;
+  price_cents: number;
+  currency: "EUR";
+  max_quantity: number | null;
+  sort_order: number;
+};
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -50,6 +59,94 @@ function parseDateTimeLocal(value: string) {
   return date;
 }
 
+function parsePriceToCents(value: string) {
+  const normalized = value.replace(",", ".").trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
+    return null;
+  }
+
+  const [eurosPart, centsPart = ""] = normalized.split(".");
+  const euros = Number(eurosPart);
+  const cents = Number(centsPart.padEnd(2, "0"));
+
+  if (!Number.isInteger(euros) || !Number.isInteger(cents)) {
+    return null;
+  }
+
+  return euros * 100 + cents;
+}
+
+function parseOptionalPositiveInteger(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return Number.NaN;
+  }
+
+  return parsed;
+}
+
+function parseTicketTypes(formData: FormData): ParsedTicketType[] {
+  const ticketTypes: ParsedTicketType[] = [];
+
+  for (let index = 1; index <= 3; index += 1) {
+    const title = getString(formData, `ticket_type_${index}_title`);
+    const description = getString(formData, `ticket_type_${index}_description`);
+    const priceValue = getString(formData, `ticket_type_${index}_price`);
+    const maxQuantityValue = getString(formData, `ticket_type_${index}_max_quantity`);
+
+    const hasAnyValue = Boolean(title || description || priceValue || maxQuantityValue);
+
+    if (!hasAnyValue) {
+      continue;
+    }
+
+    if (!title) {
+      redirectWithError(`Ticket type ${index}: title is required.`);
+    }
+
+    if (!priceValue) {
+      redirectWithError(`Ticket type ${index}: price is required.`);
+    }
+
+    const priceCents = parsePriceToCents(priceValue);
+
+    if (priceCents === null || priceCents < 0) {
+      redirectWithError(`Ticket type ${index}: insert a valid price.`);
+    }
+
+    const maxQuantity = parseOptionalPositiveInteger(maxQuantityValue);
+
+    if (Number.isNaN(maxQuantity)) {
+      redirectWithError(`Ticket type ${index}: max quantity must be at least 1.`);
+    }
+
+    ticketTypes.push({
+      title,
+      description: description || null,
+      price_cents: priceCents,
+      currency: "EUR",
+      max_quantity: maxQuantity,
+      sort_order: index - 1,
+    });
+  }
+
+  if (ticketTypes.length === 0) {
+    redirectWithError("At least one ticket type is required.");
+  }
+
+  return ticketTypes;
+}
+
 async function insertEventWithSlug(params: {
   title: string;
   description: string | null;
@@ -87,8 +184,11 @@ async function insertEventWithSlug(params: {
       .select("id, slug")
       .single();
 
-    if (!error && data?.slug) {
-      return data.slug as string;
+    if (!error && data?.id && data?.slug) {
+      return {
+        eventId: data.id as string,
+        slug: data.slug as string,
+      };
     }
 
     const isUniqueSlugError =
@@ -101,6 +201,30 @@ async function insertEventWithSlug(params: {
   }
 
   throw new Error("Could not generate a unique event link.");
+}
+
+async function insertTicketTypes(params: {
+  eventId: string;
+  ticketTypes: ParsedTicketType[];
+}) {
+  const supabase = await createClient();
+
+  const rows = params.ticketTypes.map((ticketType) => ({
+    event_id: params.eventId,
+    title: ticketType.title,
+    description: ticketType.description,
+    price_cents: ticketType.price_cents,
+    currency: ticketType.currency,
+    max_quantity: ticketType.max_quantity,
+    is_active: true,
+    sort_order: ticketType.sort_order,
+  }));
+
+  const { error } = await supabase.from("ticket_types").insert(rows);
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 export async function createEventAction(formData: FormData) {
@@ -122,6 +246,7 @@ export async function createEventAction(formData: FormData) {
   const endsAtValue = getString(formData, "ends_at");
   const maxTickets = getInteger(formData, "max_tickets");
   const maxGuestList = getInteger(formData, "max_guest_list");
+  const ticketTypes = parseTicketTypes(formData);
 
   if (!title) {
     redirectWithError("Event title is required.");
@@ -137,13 +262,17 @@ export async function createEventAction(formData: FormData) {
     redirectWithError("Valid start date and time are required.");
   }
 
+  if (startsAt <= new Date()) {
+    redirectWithError("Event start date must be in the future.");
+  }
+
   const endsAt = endsAtValue ? parseDateTimeLocal(endsAtValue) : null;
 
   if (endsAtValue && !endsAt) {
     redirectWithError("Valid end date and time are required.");
   }
 
-  if (endsAt && startsAt && endsAt <= startsAt) {
+  if (endsAt && endsAt <= startsAt) {
     redirectWithError("End date must be after start date.");
   }
 
@@ -155,10 +284,23 @@ export async function createEventAction(formData: FormData) {
     redirectWithError("Guest list limit cannot be negative.");
   }
 
-  let slug: string;
+  const totalTicketTypeCapacity = ticketTypes.reduce((total, ticketType) => {
+    return total + (ticketType.max_quantity ?? 0);
+  }, 0);
+
+  if (totalTicketTypeCapacity > maxTickets) {
+    redirectWithError(
+      "The sum of ticket type quantities cannot be greater than the event maximum tickets."
+    );
+  }
+
+  let createdEvent: {
+    eventId: string;
+    slug: string;
+  };
 
   try {
-    slug = await insertEventWithSlug({
+    createdEvent = await insertEventWithSlug({
       title,
       description: description || null,
       location,
@@ -168,6 +310,11 @@ export async function createEventAction(formData: FormData) {
       maxGuestList,
       organizerId: user.id,
     });
+
+    await insertTicketTypes({
+      eventId: createdEvent.eventId,
+      ticketTypes,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Something went wrong creating the event.";
@@ -175,5 +322,5 @@ export async function createEventAction(formData: FormData) {
     redirectWithError(message);
   }
 
-  redirect(`/events/${slug}`);
+  redirect(`/events/${createdEvent.slug}`);
 }

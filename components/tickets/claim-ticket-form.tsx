@@ -1,17 +1,27 @@
 import Link from "next/link";
 import { claimTicketAction } from "../../lib/actions/tickets";
+import type { PublicTicketType } from "../../lib/events/get-event";
 
 type ClaimTicketFormProps = {
   eventId: string;
   eventSlug: string;
+  ticketTypes: PublicTicketType[];
   existingTicketId?: string;
   error?: string;
   message?: string;
 };
 
+function formatPrice(priceCents: number, currency: string) {
+  return new Intl.NumberFormat("en", {
+    style: "currency",
+    currency,
+  }).format(priceCents / 100);
+}
+
 export function ClaimTicketForm({
   eventId,
   eventSlug,
+  ticketTypes,
   existingTicketId,
   error,
   message,
@@ -29,6 +39,14 @@ export function ClaimTicketForm({
         >
           Open your ticket
         </Link>
+      </div>
+    );
+  }
+
+  if (ticketTypes.length === 0) {
+    return (
+      <div className="rounded-md border border-yellow-300 bg-yellow-50 p-4 text-yellow-800">
+        Tickets are not available for this event yet.
       </div>
     );
   }
@@ -51,11 +69,49 @@ export function ClaimTicketForm({
         <input type="hidden" name="event_id" value={eventId} />
         <input type="hidden" name="event_slug" value={eventSlug} />
 
+        <fieldset>
+          <legend className="font-semibold">Choose your ticket</legend>
+
+          <div className="mt-4 grid gap-3">
+            {ticketTypes.map((ticketType, index) => (
+              <label
+                key={ticketType.id}
+                className="flex cursor-pointer gap-3 rounded-md border p-4"
+              >
+                <input
+                  type="radio"
+                  name="ticket_type_id"
+                  value={ticketType.id}
+                  defaultChecked={index === 0}
+                  required
+                  className="mt-1"
+                />
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <p className="font-medium">{ticketType.title}</p>
+
+                    <p className="font-semibold">
+                      {formatPrice(ticketType.price_cents, ticketType.currency)}
+                    </p>
+                  </div>
+
+                  {ticketType.description ? (
+                    <p className="mt-1 text-sm text-gray-600">
+                      {ticketType.description}
+                    </p>
+                  ) : null}
+                </div>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
         <button
           type="submit"
-          className="rounded-md bg-black px-5 py-3 font-medium text-white"
+          className="mt-5 rounded-md bg-black px-5 py-3 font-medium text-white"
         >
-          Claim ticket
+          Claim selected ticket
         </button>
       </form>
 

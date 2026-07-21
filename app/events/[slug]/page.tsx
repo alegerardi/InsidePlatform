@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { ClaimTicketForm } from "../../../components/tickets/claim-ticket-form";
 import { getUser } from "../../../lib/auth/get-user";
-import { getPublicEventBySlug } from "../../../lib/events/get-event";
+import {
+  getPublicEventBySlug,
+  getPublicTicketTypesForEvent,
+} from "../../../lib/events/get-event";
 import { getUserTicketForEvent } from "../../../lib/tickets/get-user-ticket-for-event";
+import { getBaseUrl } from "../../../lib/url/get-base-url";
 
 type PublicEventPageProps = {
   params: Promise<{
@@ -23,15 +26,6 @@ function formatEventDate(value: string) {
   }).format(new Date(value));
 }
 
-async function getBaseUrl() {
-  const headerStore = await headers();
-
-  const host = headerStore.get("host") ?? "localhost:3000";
-  const protocol = host.includes("localhost") ? "http" : "https";
-
-  return `${protocol}://${host}`;
-}
-
 export default async function PublicEventPage({
   params,
   searchParams,
@@ -44,7 +38,11 @@ export default async function PublicEventPage({
     notFound();
   }
 
-  const user = await getUser();
+  const [user, ticketTypes] = await Promise.all([
+    getUser(),
+    getPublicTicketTypesForEvent(event.id),
+  ]);
+
   const existingTicket = user
     ? await getUserTicketForEvent(event.id, user.id)
     : null;
@@ -85,11 +83,6 @@ export default async function PublicEventPage({
             <dt className="text-sm text-gray-500">Location</dt>
             <dd className="font-medium">{event.location ?? "Not specified"}</dd>
           </div>
-
-          <div>
-            <dt className="text-sm text-gray-500">Ticket capacity</dt>
-            <dd className="font-medium">{event.max_tickets}</dd>
-          </div>
         </dl>
 
         <div className="mt-8 rounded-md border border-dashed bg-gray-50 p-4">
@@ -111,6 +104,7 @@ export default async function PublicEventPage({
           <ClaimTicketForm
             eventId={event.id}
             eventSlug={event.slug ?? slug}
+            ticketTypes={ticketTypes}
             existingTicketId={existingTicket?.id}
             error={query?.error}
             message={query?.message}
