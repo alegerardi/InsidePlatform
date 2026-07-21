@@ -13,60 +13,81 @@ export type OrganizerEvent = {
   max_guest_list: number;
   organizer_id: string;
   created_at: string;
-  updated_at: string;
 };
 
 export type OrganizerEventGroups = {
   upcomingEvents: OrganizerEvent[];
+  ongoingEvents: OrganizerEvent[];
   pastEvents: OrganizerEvent[];
 };
 
-export async function getOrganizerEvents(organizerId: string) {
-  const supabase = await createClient();
+const ONGOING_FALLBACK_HOURS = 12;
 
-  const { data, error } = await supabase
-    .from("events")
-    .select(
-      "id, title, slug, description, location, starts_at, ends_at, status, max_tickets, max_guest_list, organizer_id, created_at, updated_at"
-    )
-    .eq("organizer_id", organizerId)
-    .order("starts_at", { ascending: true });
+function getEventCategory(event: OrganizerEvent, nowMs: number) {
+  const startsAtMs = new Date(event.starts_at).getTime();
 
-  if (error || !data) {
-    return [];
+  if (startsAtMs > nowMs) {
+    return "upcoming";
   }
 
-  return data as OrganizerEvent[];
+  const endsAtMs = event.ends_at
+    ? new Date(event.ends_at).getTime()
+    : startsAtMs + ONGOING_FALLBACK_HOURS * 60 * 60 * 1000;
+
+  if (endsAtMs >= nowMs) {
+    return "ongoing";
+  }
+
+  return "past";
 }
 
 export async function getOrganizerEventGroups(
   organizerId: string
 ): Promise<OrganizerEventGroups> {
-  const events = await getOrganizerEvents(organizerId);
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("events")
+    .select(
+      "id, title, slug, description, location, starts_at, ends_at, status, max_tickets, max_guest_list, organizer_id, created_at"
+    )
+    .eq("organizer_id", organizerId)
+    .order("starts_at", { ascending: true });
+
+  if (error || !data) {
+    return {
+      upcomingEvents: [],
+      ongoingEvents: [],
+      pastEvents: [],
+    };
+  }
+
   const nowMs = Date.now();
+  const events = data as OrganizerEvent[];
 
-  const upcomingEvents = events.filter((event) => {
-    const startsAt = new Date(event.starts_at).getTime();
+  const upcomingEvents: OrganizerEvent[] = [];
+  const ongoingEvents: OrganizerEvent[] = [];
+  const pastEvents: OrganizerEvent[] = [];
 
-    return (
-      startsAt >= nowMs &&
-      event.status !== "completed" &&
-      event.status !== "cancelled"
-    );
-  });
+  for (const event of events) {
+    const category = getEventCategory(event, nowMs);
 
-  const pastEvents = events.filter((event) => {
-    const startsAt = new Date(event.starts_at).getTime();
+    if (category === "upcoming") {
+      upcomingEvents.push(event);
+    } else if (category === "ongoing") {
+      ongoingEvents.push(event);
+    } else {
+      pastEvents.push(event);
+    }
+  }
 
-    return (
-      startsAt < nowMs ||
-      event.status === "completed" ||
-      event.status === "cancelled"
-    );
-  });
+  pastEvents.sort(
+    (a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime()
+  );
 
   return {
     upcomingEvents,
+    ongoingEvents,
     pastEvents,
   };
 }

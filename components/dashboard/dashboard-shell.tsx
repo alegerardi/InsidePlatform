@@ -1,9 +1,8 @@
 import type { Profile } from "../../lib/auth/get-profile";
-import type { OrganizerEventGroups } from "../../lib/events/get-organizer-events";
 import type { EventStaffAssignment } from "../../lib/events/get-organizer-event-staff";
+import type { OrganizerEventGroups } from "../../lib/events/get-organizer-events";
 import type { StaffAssignedEvent } from "../../lib/staff/get-staff-events";
 import type { TicketWithEvent } from "../../lib/tickets/get-ticket";
-import { AdminDashboard } from "./admin-dashboard";
 import { ClientDashboard } from "./client-dashboard";
 import { OrganizerDashboard } from "./organizer-dashboard";
 import { StaffDashboard } from "./staff-dashboard";
@@ -40,6 +39,7 @@ export function DashboardShell({
         <OrganizerDashboard
           profile={profile}
           upcomingEvents={organizerEventGroups.upcomingEvents}
+          ongoingEvents={organizerEventGroups.ongoingEvents}
           pastEvents={organizerEventGroups.pastEvents}
           staffAssignments={organizerStaffAssignments}
           staffFeedback={staffFeedback}
@@ -50,12 +50,24 @@ export function DashboardShell({
       return <StaffDashboard profile={profile} events={staffAssignedEvents} />;
 
     case "admin":
-      return <AdminDashboard profile={profile} />;
+      return (
+        <OrganizerDashboard
+          profile={profile}
+          upcomingEvents={organizerEventGroups.upcomingEvents}
+          ongoingEvents={organizerEventGroups.ongoingEvents}
+          pastEvents={organizerEventGroups.pastEvents}
+          staffAssignments={organizerStaffAssignments}
+          staffFeedback={staffFeedback}
+        />
+      );
 
     default:
       return (
-        <section className="rounded-lg border border-red-300 bg-red-50 p-6 text-red-700">
-          Unknown user role.
+        <section className="rounded-lg border p-6">
+          <h2 className="text-xl font-semibold">Unknown role</h2>
+          <p className="mt-2 text-gray-600">
+            Your profile role is not recognized.
+          </p>
         </section>
       );
   }

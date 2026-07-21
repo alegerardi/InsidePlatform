@@ -4,6 +4,8 @@ import type { Profile } from "../../lib/auth/get-profile";
 import type { EventStaffAssignment } from "../../lib/events/get-organizer-event-staff";
 import type { OrganizerEvent } from "../../lib/events/get-organizer-events";
 
+type EventCategory = "upcoming" | "ongoing" | "past";
+
 type StaffFeedback = {
   eventId?: string;
   message?: string;
@@ -13,6 +15,7 @@ type StaffFeedback = {
 type OrganizerDashboardProps = {
   profile: Profile;
   upcomingEvents: OrganizerEvent[];
+  ongoingEvents: OrganizerEvent[];
   pastEvents: OrganizerEvent[];
   staffAssignments: EventStaffAssignment[];
   staffFeedback?: StaffFeedback;
@@ -27,17 +30,20 @@ function formatEventDate(value: string) {
 
 function EventCard({
   event,
+  category,
   staffAssignments,
   staffFeedback,
   canEdit,
 }: {
   event: OrganizerEvent;
+  category: EventCategory;
   staffAssignments: EventStaffAssignment[];
   staffFeedback?: StaffFeedback;
   canEdit: boolean;
 }) {
   const publicPath = event.slug ? `/events/${event.slug}` : null;
   const editPath = event.slug ? `/events/${event.slug}/edit` : null;
+  const statsPath = event.slug ? `/events/${event.slug}/stats` : null;
 
   const eventStaff = staffAssignments.filter(
     (assignment) => assignment.event_id === event.id
@@ -65,11 +71,11 @@ function EventCard({
             </span>
 
             <span className="rounded-full border px-2 py-1 text-xs">
-              {event.max_tickets} tickets
+              {event.max_tickets} capacity
             </span>
 
             <span className="rounded-full border px-2 py-1 text-xs">
-              {event.max_guest_list} guest-list
+              {category}
             </span>
           </div>
         </div>
@@ -85,6 +91,15 @@ function EventCard({
           ) : (
             <span className="text-sm text-gray-500">No public link</span>
           )}
+
+          {statsPath ? (
+            <Link
+              href={statsPath}
+              className="rounded-md border px-4 py-2 text-sm font-medium"
+            >
+              Statistics
+            </Link>
+          ) : null}
 
           {canEdit && editPath ? (
             <Link
@@ -160,9 +175,53 @@ function EventCard({
   );
 }
 
+function EventSection({
+  title,
+  emptyMessage,
+  events,
+  category,
+  canEdit,
+  staffAssignments,
+  staffFeedback,
+}: {
+  title: string;
+  emptyMessage: string;
+  events: OrganizerEvent[];
+  category: EventCategory;
+  canEdit: boolean;
+  staffAssignments: EventStaffAssignment[];
+  staffFeedback?: StaffFeedback;
+}) {
+  return (
+    <div className="mt-10">
+      <h3 className="text-lg font-semibold">{title}</h3>
+
+      {events.length > 0 ? (
+        <div className="mt-4 grid gap-4">
+          {events.map((event) => (
+            <EventCard
+              key={event.id}
+              event={event}
+              category={category}
+              staffAssignments={staffAssignments}
+              staffFeedback={staffFeedback}
+              canEdit={canEdit}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-md border border-dashed p-4 text-sm text-gray-600">
+          {emptyMessage}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function OrganizerDashboard({
   profile,
   upcomingEvents,
+  ongoingEvents,
   pastEvents,
   staffAssignments,
   staffFeedback,
@@ -186,49 +245,35 @@ export function OrganizerDashboard({
         </Link>
       </div>
 
-      <div className="mt-8">
-        <h3 className="text-lg font-semibold">Upcoming events</h3>
+      <EventSection
+        title="Upcoming events"
+        emptyMessage="No upcoming events yet."
+        events={upcomingEvents}
+        category="upcoming"
+        canEdit={true}
+        staffAssignments={staffAssignments}
+        staffFeedback={staffFeedback}
+      />
 
-        {upcomingEvents.length > 0 ? (
-          <div className="mt-4 grid gap-4">
-            {upcomingEvents.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                staffAssignments={staffAssignments}
-                staffFeedback={staffFeedback}
-                canEdit={true}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-4 rounded-md border border-dashed p-4 text-sm text-gray-600">
-            No upcoming events yet.
-          </div>
-        )}
-      </div>
+      <EventSection
+        title="Ongoing events"
+        emptyMessage="No ongoing events right now."
+        events={ongoingEvents}
+        category="ongoing"
+        canEdit={false}
+        staffAssignments={staffAssignments}
+        staffFeedback={staffFeedback}
+      />
 
-      <div className="mt-10">
-        <h3 className="text-lg font-semibold">Past events</h3>
-
-        {pastEvents.length > 0 ? (
-          <div className="mt-4 grid gap-4">
-            {pastEvents.map((event) => (
-              <EventCard
-                key={event.id}
-                event={event}
-                staffAssignments={staffAssignments}
-                staffFeedback={staffFeedback}
-                canEdit={false}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-4 rounded-md border border-dashed p-4 text-sm text-gray-600">
-            No past events yet.
-          </div>
-        )}
-      </div>
+      <EventSection
+        title="Past events"
+        emptyMessage="No past events yet."
+        events={pastEvents}
+        category="past"
+        canEdit={false}
+        staffAssignments={staffAssignments}
+        staffFeedback={staffFeedback}
+      />
     </section>
   );
 }

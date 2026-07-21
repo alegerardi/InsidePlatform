@@ -1,18 +1,11 @@
+import { redirect } from "next/navigation";
 import { DashboardShell } from "../../components/dashboard/dashboard-shell";
 import { getProfile } from "../../lib/auth/get-profile";
 import { requireUser } from "../../lib/auth/require-user";
-import {
-  getOrganizerEventGroups,
-  type OrganizerEventGroups,
-} from "../../lib/events/get-organizer-events";
 import { getOrganizerEventStaffAssignments } from "../../lib/events/get-organizer-event-staff";
-import { getClientTickets } from "../../lib/tickets/get-client-tickets";
+import { getOrganizerEventGroups } from "../../lib/events/get-organizer-events";
 import { getStaffAssignedEvents } from "../../lib/staff/get-staff-events";
-
-const emptyOrganizerEventGroups: OrganizerEventGroups = {
-  upcomingEvents: [],
-  pastEvents: [],
-};
+import { getClientTickets } from "../../lib/tickets/get-client-tickets";
 
 type DashboardPageProps = {
   searchParams?: Promise<{
@@ -25,51 +18,37 @@ type DashboardPageProps = {
 export default async function DashboardPage({
   searchParams,
 }: DashboardPageProps) {
-  const query = await searchParams;
-
   const user = await requireUser("/dashboard");
   const profile = await getProfile(user.id);
+  const query = await searchParams;
 
   if (!profile) {
-    return (
-      <main className="mx-auto max-w-5xl px-6 py-12">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-
-        <div className="mt-6 rounded-md border border-red-300 bg-red-50 p-4 text-red-700">
-          Profile not found. Try logging out and signing in again.
-        </div>
-      </main>
-    );
+    redirect("/login");
   }
 
-  const organizerEventGroups =
-    profile.role === "event_organizer"
-      ? await getOrganizerEventGroups(profile.id)
-      : emptyOrganizerEventGroups;
+  const isOrganizer =
+    profile.role === "event_organizer" || profile.role === "admin";
 
-  const organizerStaffAssignments =
-    profile.role === "event_organizer"
-      ? await getOrganizerEventStaffAssignments()
-      : [];
-
-  const clientTickets =
-    profile.role === "client" ? await getClientTickets(profile.id) : [];
-
-  const staffAssignedEvents =
-  profile.role === "event_staff" ? await getStaffAssignedEvents() : [];
+  const [
+    organizerEventGroups,
+    organizerStaffAssignments,
+    clientTickets,
+    staffAssignedEvents,
+  ] = await Promise.all([
+    isOrganizer
+      ? getOrganizerEventGroups(profile.id)
+      : Promise.resolve({
+          upcomingEvents: [],
+          ongoingEvents: [],
+          pastEvents: [],
+        }),
+    isOrganizer ? getOrganizerEventStaffAssignments() : Promise.resolve([]),
+    profile.role === "client" ? getClientTickets(profile.id) : Promise.resolve([]),
+    profile.role === "event_staff" ? getStaffAssignedEvents() : Promise.resolve([]),
+  ]);
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-12">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="mt-2 text-gray-600">Role-aware dashboard container.</p>
-      </div>
-
-      <section className="mb-8 rounded-lg border bg-gray-50 p-4">
-        <p className="text-sm text-gray-500">Current role</p>
-        <p className="font-semibold">{profile.role}</p>
-      </section>
-
+    <main className="mx-auto max-w-6xl px-6 py-12">
       <DashboardShell
         profile={profile}
         organizerEventGroups={organizerEventGroups}
