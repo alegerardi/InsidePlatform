@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CopyEventLinkButton } from "../../../components/events/copy-event-link-button";
 import { ClaimTicketForm } from "../../../components/tickets/claim-ticket-form";
 import { getUser } from "../../../lib/auth/get-user";
 import {
@@ -50,57 +51,60 @@ export default async function PublicEventPage({
     : null;
 
   const baseUrl = await getBaseUrl();
-  const eventPath = `/events/${event.slug}`;
+  const eventPath = `/events/${event.slug ?? slug}`;
   const fullEventUrl = `${baseUrl}${eventPath}`;
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
       <div className="rounded-lg border p-8">
-        <p className="text-sm font-medium uppercase tracking-wide text-gray-500">
-          Public event page
-        </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-wide opacity-60">
+              Public event page
+            </p>
 
-        <h1 className="mt-3 text-4xl font-bold">{event.title}</h1>
+            <h1 className="mt-3 text-4xl font-bold">{event.title}</h1>
+          </div>
+
+          <CopyEventLinkButton eventUrl={fullEventUrl} />
+        </div>
 
         {event.description ? (
-          <p className="mt-4 whitespace-pre-line text-gray-700">
+          <p className="mt-4 whitespace-pre-line opacity-80">
             {event.description}
           </p>
         ) : null}
 
         <dl className="mt-8 grid gap-5 md:grid-cols-2">
           <div>
-            <dt className="text-sm text-gray-500">Starts at</dt>
+            <dt className="text-sm opacity-60">Starts at</dt>
             <dd className="font-medium">{formatEventDate(event.starts_at)}</dd>
           </div>
 
           {event.ends_at ? (
             <div>
-              <dt className="text-sm text-gray-500">Ends at</dt>
+              <dt className="text-sm opacity-60">Ends at</dt>
               <dd className="font-medium">{formatEventDate(event.ends_at)}</dd>
             </div>
           ) : null}
 
           <div>
-            <dt className="text-sm text-gray-500">Location</dt>
+            <dt className="text-sm opacity-60">Location</dt>
             <dd className="font-medium">{event.location ?? "Not specified"}</dd>
           </div>
         </dl>
 
-        <div className="mt-8 rounded-md border border-dashed bg-gray-50 p-4">
-          <p className="text-sm font-medium text-gray-500">
-            Shareable event link
+        {query?.message ? (
+          <p className="mt-8 rounded-md border px-4 py-3 text-sm font-medium">
+            {query.message}
           </p>
+        ) : null}
 
-          <p className="mt-2 break-all rounded-md bg-white p-3 font-mono text-sm">
-            {fullEventUrl}
+        {query?.error ? (
+          <p className="mt-8 rounded-md border px-4 py-3 text-sm font-medium">
+            {query.error}
           </p>
-
-          <p className="mt-2 text-sm text-gray-600">
-            Copy this link and share it with clients. Anyone can open this public
-            event page.
-          </p>
-        </div>
+        ) : null}
 
         <div className="mt-8">
           <ClaimTicketForm
@@ -108,13 +112,14 @@ export default async function PublicEventPage({
             eventSlug={event.slug ?? slug}
             ticketTypes={ticketTypes}
             existingTicketId={existingTicket?.id}
-            error={query?.error}
-            message={query?.message}
           />
         </div>
 
         <div className="mt-8">
-          <Link href="/dashboard" className="rounded-md border px-5 py-3 font-medium">
+          <Link
+            href="/dashboard"
+            className="inline-flex rounded-md border px-5 py-3 font-medium transition hover:opacity-80"
+          >
             Go to dashboard
           </Link>
         </div>

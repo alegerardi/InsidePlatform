@@ -7,8 +7,7 @@ import { ClientDashboard } from "./client-dashboard";
 import { OrganizerDashboard } from "./organizer-dashboard";
 import { StaffDashboard } from "./staff-dashboard";
 
-type StaffFeedback = {
-  eventId?: string;
+type OrganizerFeedback = {
   message?: string;
   error?: string;
 };
@@ -17,7 +16,10 @@ type DashboardShellProps = {
   profile: Profile;
   organizerEventGroups: OrganizerEventGroups;
   organizerStaffAssignments?: EventStaffAssignment[];
-  staffFeedback?: StaffFeedback;
+  organizerSelectedEventSlug?: string;
+  organizerSelectedTab?: string;
+  organizerFeedback?: OrganizerFeedback;
+  organizerBaseUrl?: string;
   clientTickets?: TicketWithEvent[];
   staffAssignedEvents?: StaffAssignedEvent[];
 };
@@ -26,7 +28,10 @@ export function DashboardShell({
   profile,
   organizerEventGroups,
   organizerStaffAssignments = [],
-  staffFeedback,
+  organizerSelectedEventSlug,
+  organizerSelectedTab,
+  organizerFeedback,
+  organizerBaseUrl = "",
   clientTickets = [],
   staffAssignedEvents = [],
 }: DashboardShellProps) {
@@ -38,11 +43,12 @@ export function DashboardShell({
       return (
         <OrganizerDashboard
           profile={profile}
-          upcomingEvents={organizerEventGroups.upcomingEvents}
-          ongoingEvents={organizerEventGroups.ongoingEvents}
-          pastEvents={organizerEventGroups.pastEvents}
+          eventGroups={organizerEventGroups}
           staffAssignments={organizerStaffAssignments}
-          staffFeedback={staffFeedback}
+          selectedEventSlug={organizerSelectedEventSlug}
+          selectedTab={organizerSelectedTab}
+          feedback={organizerFeedback}
+          baseUrl={organizerBaseUrl}
         />
       );
 
@@ -53,11 +59,12 @@ export function DashboardShell({
       return (
         <OrganizerDashboard
           profile={profile}
-          upcomingEvents={organizerEventGroups.upcomingEvents}
-          ongoingEvents={organizerEventGroups.ongoingEvents}
-          pastEvents={organizerEventGroups.pastEvents}
+          eventGroups={organizerEventGroups}
           staffAssignments={organizerStaffAssignments}
-          staffFeedback={staffFeedback}
+          selectedEventSlug={organizerSelectedEventSlug}
+          selectedTab={organizerSelectedTab}
+          feedback={organizerFeedback}
+          baseUrl={organizerBaseUrl}
         />
       );
 
@@ -65,7 +72,7 @@ export function DashboardShell({
       return (
         <section className="rounded-lg border p-6">
           <h2 className="text-xl font-semibold">Unknown role</h2>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 opacity-70">
             Your profile role is not recognized.
           </p>
         </section>

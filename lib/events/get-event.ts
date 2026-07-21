@@ -7,6 +7,8 @@ export type EventStatus =
   | "completed"
   | "cancelled";
 
+export type TicketCapacityPool = "paid" | "guest_list";
+
 export type EventRecord = {
   id: string;
   title: string;
@@ -28,6 +30,7 @@ export type PublicTicketType = {
   description: string | null;
   price_cents: number;
   currency: string;
+  capacity_pool: TicketCapacityPool;
   sort_order: number;
 };
 
@@ -55,9 +58,12 @@ export async function getPublicTicketTypesForEvent(eventId: string) {
 
   const { data, error } = await supabase
     .from("ticket_types")
-    .select("id, event_id, title, description, price_cents, currency, sort_order")
+    .select(
+      "id, event_id, title, description, price_cents, currency, capacity_pool, sort_order"
+    )
     .eq("event_id", eventId)
     .eq("is_active", true)
+    .order("capacity_pool", { ascending: true })
     .order("sort_order", { ascending: true });
 
   if (error || !data) {

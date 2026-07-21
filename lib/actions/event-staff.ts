@@ -10,10 +10,9 @@ type AssignStaffResponse = {
   result:
     | "success"
     | "already_assigned"
-    | "staff_not_found"
-    | "invalid_email"
-    | "event_not_found"
     | "unauthorized"
+    | "event_not_found"
+    | "staff_not_found"
     | "error";
   message: string;
   staff_email?: string;
@@ -23,24 +22,35 @@ type AssignStaffResponse = {
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
 
-  if (typeof value !== "string") {
-    return "";
-  }
-
-  return value.trim();
+  return typeof value === "string" ? value.trim() : "";
 }
 
-function redirectToDashboardWithStaffMessage(params: {
-  eventId: string;
-  type: "staffMessage" | "staffError";
-  message: string;
-}): never {
-  const searchParams = new URLSearchParams({
-    staffEventId: params.eventId,
-    [params.type]: params.message,
-  });
+function getSafeRedirectPath(formData: FormData) {
+  const redirectPath = getString(formData, "redirect_path");
 
-  redirect(`/dashboard?${searchParams.toString()}`);
+  if (
+    !redirectPath ||
+    !redirectPath.startsWith("/") ||
+    redirectPath.startsWith("//") ||
+    redirectPath.includes("://")
+  ) {
+    return "/dashboard";
+  }
+
+  return redirectPath;
+}
+
+function redirectWithFeedback(
+  redirectPath: string,
+  type: "message" | "error",
+  message: string
+): never {
+  const params = new URLSearchParams();
+  params.set(type, message);
+
+  const separator = redirectPath.includes("?") ? "&" : "?";
+
+  redirect(`${redirectPath}${separator}${params.toString()}`);
 }
 
 export async function addEventStaffAction(formData: FormData) {
@@ -48,9 +58,14 @@ export async function addEventStaffAction(formData: FormData) {
 
   const eventId = getString(formData, "event_id");
   const staffEmail = getString(formData, "staff_email").toLowerCase();
+  const redirectPath = getSafeRedirectPath(formData);
 
   if (!eventId) {
     redirect("/dashboard");
+  }
+
+  if (!staffEmail) {
+    redirectWithFeedback(redirectPath, "error", "Staff email is required.");
   }
 
   const supabase = await createClient();
@@ -65,7 +80,6 @@ export async function addEventStaffAction(formData: FormData) {
 
     console.error("addEventStaffAction RPC error", {
       debugId,
-      action: "event_staff_assign",
       eventId,
       staffEmail,
       errorCode: error.code,
@@ -75,40 +89,47 @@ export async function addEventStaffAction(formData: FormData) {
       timestamp: new Date().toISOString(),
     });
 
-    redirectToDashboardWithStaffMessage({
+    redirectWithFeedback(
+      redirectPath,
+      "error",
+      `Could not add staff. Reference: ${debugId}`
+    );
+  }
+
+  if (!data) {
+    const debugId = crypto.randomUUID();
+
+    console.error("addEventStaffAction empty response", {
+      debugId,
       eventId,
-      type: "staffError",
-      message: `We could not add this staff member. Please try again. Reference: ${debugId}`,
+      staffEmail,
+      timestamp: new Date().toISOString(),
     });
+
+    redirectWithFeedback(
+      redirectPath,
+      "error",
+      `Could not add staff. Reference: ${debugId}`
+    );
   }
 
   const result = data as AssignStaffResponse;
 
-  if (!result.success) {
-    console.warn("addEventStaffAction business failure", {
-      action: "event_staff_assign",
-      eventId,
-      staffEmail,
-      result: result.result,
-      message: result.message,
-      timestamp: new Date().toISOString(),
-    });
-  }
-
   revalidatePath("/dashboard");
+  revalidatePath(redirectPath);
 
   const safeMessage =
-  result.result === "error" && result.debug_id
-    ? `${result.message} Reference: ${result.debug_id}`
-    : result.result === "already_assigned"
-      ? `This staff member is already assigned: ${result.staff_email}`
-      : result.staff_email
-        ? `Staff added: ${result.staff_email}`
-        : result.message;
+    result.result === "error" && result.debug_id
+      ? `${result.message} Reference: ${result.debug_id}`
+      : result.result === "already_assigned"
+        ? `This staff member is already assigned: ${result.staff_email ?? staffEmail}`
+        : result.staff_email
+          ? `Staff added: ${result.staff_email}`
+          : result.message;
 
-  redirectToDashboardWithStaffMessage({
-    eventId,
-    type: result.success ? "staffMessage" : "staffError",
-    message: safeMessage,
-  });
+  redirectWithFeedback(
+    redirectPath,
+    result.success ? "message" : "error",
+    safeMessage
+  );
 }

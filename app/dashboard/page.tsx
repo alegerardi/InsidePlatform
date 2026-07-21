@@ -6,12 +6,14 @@ import { getOrganizerEventStaffAssignments } from "../../lib/events/get-organize
 import { getOrganizerEventGroups } from "../../lib/events/get-organizer-events";
 import { getStaffAssignedEvents } from "../../lib/staff/get-staff-events";
 import { getClientTickets } from "../../lib/tickets/get-client-tickets";
+import { getBaseUrl } from "../../lib/url/get-base-url";
 
 type DashboardPageProps = {
   searchParams?: Promise<{
-    staffEventId?: string;
-    staffMessage?: string;
-    staffError?: string;
+    event?: string;
+    tab?: string;
+    message?: string;
+    error?: string;
   }>;
 };
 
@@ -34,6 +36,7 @@ export default async function DashboardPage({
     organizerStaffAssignments,
     clientTickets,
     staffAssignedEvents,
+    baseUrl,
   ] = await Promise.all([
     isOrganizer
       ? getOrganizerEventGroups(profile.id)
@@ -45,6 +48,7 @@ export default async function DashboardPage({
     isOrganizer ? getOrganizerEventStaffAssignments() : Promise.resolve([]),
     profile.role === "client" ? getClientTickets(profile.id) : Promise.resolve([]),
     profile.role === "event_staff" ? getStaffAssignedEvents() : Promise.resolve([]),
+    isOrganizer ? getBaseUrl() : Promise.resolve(""),
   ]);
 
   return (
@@ -53,11 +57,13 @@ export default async function DashboardPage({
         profile={profile}
         organizerEventGroups={organizerEventGroups}
         organizerStaffAssignments={organizerStaffAssignments}
-        staffFeedback={{
-          eventId: query?.staffEventId,
-          message: query?.staffMessage,
-          error: query?.staffError,
+        organizerSelectedEventSlug={query?.event}
+        organizerSelectedTab={query?.tab}
+        organizerFeedback={{
+          message: query?.message,
+          error: query?.error,
         }}
+        organizerBaseUrl={baseUrl}
         clientTickets={clientTickets}
         staffAssignedEvents={staffAssignedEvents}
       />

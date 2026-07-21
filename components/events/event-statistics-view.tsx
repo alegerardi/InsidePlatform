@@ -74,241 +74,313 @@ function getFallbackStats(eventId: string): OrganizerEventStats {
   };
 }
 
-function StatCard({
+function MetricCard({
   label,
   value,
   helper,
+  large = false,
 }: {
   label: string;
   value: string | number;
   helper?: string;
+  large?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-      <p className="text-sm text-zinc-400">{label}</p>
-      <p className="mt-2 text-3xl font-semibold text-white">{value}</p>
-      {helper ? <p className="mt-2 text-xs text-zinc-500">{helper}</p> : null}
+    <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-6">
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/35">
+        {label}
+      </p>
+
+      <p
+        className={
+          large
+            ? "mt-3 text-4xl font-semibold tracking-tight text-white"
+            : "mt-3 text-3xl font-semibold tracking-tight text-white"
+        }
+      >
+        {value}
+      </p>
+
+      {helper ? <p className="mt-2 text-sm text-white/45">{helper}</p> : null}
     </div>
   );
 }
 
-function SectionTitle({
-  eyebrow,
-  title,
-  description,
+function ProgressBar({
+  value,
+  max,
 }: {
-  eyebrow?: string;
-  title: string;
-  description?: string;
+  value: number;
+  max: number;
 }) {
+  const percentage = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+
   return (
-    <div>
-      {eyebrow ? (
-        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-          {eyebrow}
-        </p>
-      ) : null}
-
-      <h2 className="mt-1 text-xl font-semibold text-white">{title}</h2>
-
-      {description ? (
-        <p className="mt-2 text-sm text-zinc-400">{description}</p>
-      ) : null}
+    <div className="h-2 overflow-hidden rounded-full bg-white/10">
+      <div
+        className="h-full rounded-full bg-white"
+        style={{ width: `${percentage}%` }}
+      />
     </div>
   );
 }
 
-function HorizontalBarChart({
+function CapacityCard({
   title,
-  rows,
-}: {
-  title: string;
-  rows: {
-    label: string;
-    value: number;
-    helper?: string;
-  }[];
-}) {
-  const maxValue = Math.max(...rows.map((row) => row.value), 1);
-
-  return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-      <h3 className="font-semibold text-white">{title}</h3>
-
-      {rows.length > 0 ? (
-        <div className="mt-5 grid gap-4">
-          {rows.map((row) => {
-            const width = Math.max(
-              (row.value / maxValue) * 100,
-              row.value > 0 ? 5 : 0
-            );
-
-            return (
-              <div key={row.label}>
-                <div className="mb-2 flex items-center justify-between gap-4 text-sm">
-                  <span className="font-medium text-zinc-200">{row.label}</span>
-                  <span className="text-zinc-400">{row.value}</span>
-                </div>
-
-                <div className="h-3 overflow-hidden rounded-full bg-zinc-800">
-                  <div
-                    className="h-full rounded-full bg-white"
-                    style={{ width: `${width}%` }}
-                  />
-                </div>
-
-                {row.helper ? (
-                  <p className="mt-1 text-xs text-zinc-500">{row.helper}</p>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-zinc-400">No data yet.</p>
-      )}
-    </section>
-  );
-}
-
-function TicketTypeTable({
-  title,
-  ticketTypeStats,
+  issued,
+  remaining,
+  entrances,
+  capacity,
   showEntrances,
 }: {
   title: string;
-  ticketTypeStats: OrganizerTicketTypeStats[];
+  issued: number;
+  remaining: number;
+  entrances: number;
+  capacity: number;
   showEntrances: boolean;
 }) {
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-      <h3 className="font-semibold text-white">{title}</h3>
+    <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/35">
+            Capacity pool
+          </p>
 
-      {ticketTypeStats.length === 0 ? (
-        <p className="mt-3 text-sm text-zinc-400">No ticket types found.</p>
-      ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[760px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800 text-left text-zinc-400">
-                <th className="py-3 pr-4 font-medium">Type</th>
-                <th className="py-3 pr-4 font-medium">Pool</th>
-                <th className="py-3 pr-4 font-medium">Price</th>
-                <th className="py-3 pr-4 font-medium">Issued</th>
-                {showEntrances ? (
-                  <th className="py-3 pr-4 font-medium">Entrances</th>
-                ) : null}
-                <th className="py-3 pr-4 font-medium">Type remaining</th>
-                <th className="py-3 pr-4 font-medium">Revenue</th>
-              </tr>
-            </thead>
+          <h3 className="mt-2 text-xl font-semibold text-white">{title}</h3>
+        </div>
 
-            <tbody>
-              {ticketTypeStats.map((ticketType) => (
-                <tr
-                  key={ticketType.ticket_type_id}
-                  className="border-b border-zinc-800 last:border-0"
-                >
-                  <td className="py-3 pr-4 text-zinc-100">
-                    <span className="font-medium">
+        <p className="text-sm text-white/45">{remaining} left</p>
+      </div>
+
+      <div className="mt-6">
+        <div className="mb-3 flex items-center justify-between text-sm">
+          <span className="text-white/50">Issued</span>
+          <span className="font-medium text-white">
+            {issued} / {capacity}
+          </span>
+        </div>
+
+        <ProgressBar value={issued} max={capacity} />
+      </div>
+
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <p className="text-xs text-white/35">Issued</p>
+          <p className="mt-1 text-2xl font-semibold text-white">{issued}</p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <p className="text-xs text-white/35">
+            {showEntrances ? "Entrances" : "Remaining"}
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-white">
+            {showEntrances ? entrances : remaining}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TicketMix({
+  ticketTypeStats,
+  showEntrances,
+}: {
+  ticketTypeStats: OrganizerTicketTypeStats[];
+  showEntrances: boolean;
+}) {
+  const maxIssued = Math.max(
+    ...ticketTypeStats.map((ticketType) => ticketType.sold_count),
+    1
+  );
+
+  return (
+    <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/35">
+            Breakdown
+          </p>
+
+          <h3 className="mt-2 text-xl font-semibold text-white">Ticket mix</h3>
+        </div>
+
+        <span className="rounded-full border border-white/15 px-3 py-1 text-sm text-white/50">
+          {ticketTypeStats.length} types
+        </span>
+      </div>
+
+      {ticketTypeStats.length > 0 ? (
+        <div className="mt-6 grid gap-4">
+          {ticketTypeStats.map((ticketType) => (
+            <div
+              key={ticketType.ticket_type_id}
+              className="rounded-2xl border border-white/10 bg-black/20 p-4"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="font-semibold text-white">
                       {ticketType.ticket_type_title}
+                    </h4>
+
+                    <span className="rounded-full border border-white/15 px-2 py-0.5 text-xs text-white/50">
+                      {ticketType.capacity_pool === "guest_list"
+                        ? "Guest list"
+                        : "Paid"}
                     </span>
+                  </div>
 
-                    {!ticketType.is_active ? (
-                      <span className="ml-2 rounded-full border border-zinc-700 px-2 py-0.5 text-xs text-zinc-500">
-                        inactive
-                      </span>
-                    ) : null}
-                  </td>
-
-                  <td className="py-3 pr-4 text-zinc-300">
-                    {ticketType.capacity_pool === "guest_list"
-                      ? "Guest list"
-                      : "Paid"}
-                  </td>
-
-                  <td className="py-3 pr-4 text-zinc-300">
+                  <p className="mt-1 text-sm text-white/45">
                     {formatPrice(ticketType.price_cents, ticketType.currency)}
-                  </td>
+                  </p>
+                </div>
 
-                  <td className="py-3 pr-4 text-zinc-300">
-                    {ticketType.sold_count}
-                  </td>
+                <div className="text-left sm:text-right">
+                  <p className="font-semibold text-white">
+                    {ticketType.sold_count} issued
+                  </p>
 
                   {showEntrances ? (
-                    <td className="py-3 pr-4 text-zinc-300">
-                      {ticketType.successful_entrances}
-                    </td>
-                  ) : null}
+                    <p className="mt-1 text-sm text-white/45">
+                      {ticketType.successful_entrances} entrances
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-sm text-white/45">
+                      {ticketType.remaining_quantity ?? "Unlimited"} left
+                    </p>
+                  )}
+                </div>
+              </div>
 
-                  <td className="py-3 pr-4 text-zinc-300">
-                    {ticketType.remaining_quantity ?? "Unlimited"}
-                  </td>
+              <div className="mt-4">
+                <ProgressBar value={ticketType.sold_count} max={maxIssued} />
+              </div>
 
-                  <td className="py-3 pr-4 text-zinc-300">
-                    {formatPrice(
-                      ticketType.gross_revenue_cents,
-                      ticketType.currency
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              {ticketType.gross_revenue_cents > 0 ? (
+                <p className="mt-3 text-sm text-white/45">
+                  {formatPrice(
+                    ticketType.gross_revenue_cents,
+                    ticketType.currency
+                  )}{" "}
+                  revenue
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-6 rounded-2xl border border-dashed border-white/15 p-5 text-sm text-white/45">
+          No ticket data yet.
         </div>
       )}
     </section>
   );
 }
 
-function EntranceTimelineChart({
+function OperationalSummary({
+  category,
+  stats,
+}: {
+  category: EventCategory;
+  stats: OrganizerEventStats;
+}) {
+  if (category === "upcoming") {
+    return null;
+  }
+
+  const stillExpected = Math.max(
+    stats.tickets_sold - stats.successful_entrances,
+    0
+  );
+
+  const noShows = Math.max(stats.tickets_sold - stats.successful_entrances, 0);
+
+  return (
+    <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/35">
+        {category === "ongoing" ? "Live door" : "Final result"}
+      </p>
+
+      <h3 className="mt-2 text-xl font-semibold text-white">
+        {category === "ongoing" ? "Entrance control" : "Attendance"}
+      </h3>
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <p className="text-xs text-white/35">Entrances</p>
+          <p className="mt-1 text-2xl font-semibold text-white">
+            {stats.successful_entrances}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <p className="text-xs text-white/35">
+            {category === "ongoing" ? "Expected" : "No-shows"}
+          </p>
+          <p className="mt-1 text-2xl font-semibold text-white">
+            {category === "ongoing" ? stillExpected : noShows}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+          <p className="text-xs text-white/35">Check-in rate</p>
+          <p className="mt-1 text-2xl font-semibold text-white">
+            {formatPercentage(stats.successful_entrances, stats.tickets_sold)}
+          </p>
+        </div>
+      </div>
+
+      {(stats.duplicate_scan_attempts > 0 || stats.invalid_scan_attempts > 0) ? (
+        <p className="mt-5 text-sm text-white/45">
+          {stats.duplicate_scan_attempts} duplicate scans ·{" "}
+          {stats.invalid_scan_attempts} invalid scans
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function EntranceTimeline({
   rows,
 }: {
   rows: OrganizerEntranceTimeStats[];
 }) {
+  if (rows.length === 0) {
+    return null;
+  }
+
   const maxValue = Math.max(...rows.map((row) => row.successful_entrances), 1);
 
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-      <h3 className="font-semibold text-white">Entrances over time</h3>
+    <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/35">
+        Timeline
+      </p>
 
-      {rows.length > 0 ? (
-        <div className="mt-5 grid gap-4">
-          {rows.map((row) => {
-            const width = Math.max(
-              (row.successful_entrances / maxValue) * 100,
-              row.successful_entrances > 0 ? 5 : 0
-            );
+      <h3 className="mt-2 text-xl font-semibold text-white">
+        Entrances over time
+      </h3>
 
-            return (
-              <div key={`${row.event_id}-${row.bucket_start}`}>
-                <div className="mb-2 flex items-center justify-between gap-4 text-sm">
-                  <span className="font-medium text-zinc-200">
-                    {formatTime(row.bucket_start)}
-                  </span>
+      <div className="mt-6 grid gap-4">
+        {rows.map((row) => (
+          <div key={`${row.event_id}-${row.bucket_start}`}>
+            <div className="mb-2 flex items-center justify-between gap-4 text-sm">
+              <span className="font-medium text-white/75">
+                {formatTime(row.bucket_start)}
+              </span>
 
-                  <span className="text-zinc-400">
-                    {row.successful_entrances} total ·{" "}
-                    {row.paid_successful_entrances} paid ·{" "}
-                    {row.guest_list_successful_entrances} guest
-                  </span>
-                </div>
+              <span className="text-white/45">
+                {row.successful_entrances}
+              </span>
+            </div>
 
-                <div className="h-3 overflow-hidden rounded-full bg-zinc-800">
-                  <div
-                    className="h-full rounded-full bg-white"
-                    style={{ width: `${width}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-zinc-400">
-          No entrances recorded yet.
-        </p>
-      )}
+            <ProgressBar value={row.successful_entrances} max={maxValue} />
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -321,281 +393,132 @@ export function EventStatisticsView({
   entranceTimeStats,
 }: EventStatisticsViewProps) {
   const stats = eventStats ?? getFallbackStats(event.id);
-
-  const paidTicketTypes = ticketTypeStats.filter(
-    (ticketType) => ticketType.capacity_pool === "paid"
-  );
-
-  const guestListTicketTypes = ticketTypeStats.filter(
-    (ticketType) => ticketType.capacity_pool === "guest_list"
-  );
-
-  const paidSoldRows = paidTicketTypes.map((ticketType) => ({
-    label: ticketType.ticket_type_title,
-    value: ticketType.sold_count,
-    helper: formatPrice(ticketType.gross_revenue_cents, ticketType.currency),
-  }));
-
-  const guestListRows = guestListTicketTypes.map((ticketType) => ({
-    label: ticketType.ticket_type_title,
-    value: ticketType.sold_count,
-    helper: `${ticketType.remaining_quantity ?? "Unlimited"} remaining in this type`,
-  }));
-
-  const paidEntranceRows = paidTicketTypes.map((ticketType) => ({
-    label: ticketType.ticket_type_title,
-    value: ticketType.successful_entrances,
-  }));
-
-  const guestListEntranceRows = guestListTicketTypes.map((ticketType) => ({
-    label: ticketType.ticket_type_title,
-    value: ticketType.successful_entrances,
-  }));
-
-  const stillExpected = Math.max(
-    stats.tickets_sold - stats.successful_entrances,
-    0
-  );
-
-  const noShows = Math.max(stats.tickets_sold - stats.successful_entrances, 0);
-
-  const paidNoShows = Math.max(
-    stats.paid_tickets_sold - stats.paid_successful_entrances,
-    0
-  );
-
-  const guestListNoShows = Math.max(
-    stats.guest_list_tickets_claimed - stats.guest_list_successful_entrances,
-    0
-  );
-
   const showEntrances = category !== "upcoming";
 
+  const paidCapacity = stats.paid_tickets_sold + stats.paid_remaining_capacity;
+  const guestListCapacity =
+    stats.guest_list_tickets_claimed + stats.guest_list_remaining_capacity;
+
+  const heroThirdMetric =
+    category === "upcoming"
+      ? stats.paid_remaining_capacity + stats.guest_list_remaining_capacity
+      : stats.successful_entrances;
+
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-6 text-zinc-100">
-      <div className="flex flex-col gap-4 border-b border-zinc-800 pb-6 md:flex-row md:items-start md:justify-between">
-        <div>
-          <p className="text-sm font-medium uppercase tracking-wide text-zinc-500">
-            {category} event statistics
-          </p>
+    <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.02] shadow-2xl shadow-black/30">
+      <section className="border-b border-white/10 p-8 md:p-10">
+        <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.24em] text-white/40">
+              {category} statistics
+            </p>
 
-          <h1 className="mt-2 text-3xl font-bold text-white">{event.title}</h1>
+            <h1 className="mt-3 text-4xl font-bold tracking-tight text-white">
+              {event.title}
+            </h1>
 
-          <p className="mt-2 text-zinc-400">{formatDate(event.starts_at)}</p>
+            <p className="mt-3 text-sm text-white/45">
+              {formatDate(event.starts_at)}
+              {event.location ? ` · ${event.location}` : ""}
+            </p>
+          </div>
 
-          {event.location ? (
-            <p className="mt-1 text-zinc-400">{event.location}</p>
-          ) : null}
-        </div>
+          <div className="flex flex-wrap gap-3">
+            {event.slug ? (
+              <Link
+                href={`/events/${event.slug}`}
+                className="rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+              >
+                Public page
+              </Link>
+            ) : null}
 
-        <div className="flex flex-wrap gap-3">
-          {event.slug ? (
             <Link
-              href={`/events/${event.slug}`}
-              className="rounded-md border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-100"
+              href="/dashboard"
+              className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-85"
             >
-              Public page
+              Dashboard
             </Link>
-          ) : null}
-
-          <Link
-            href="/dashboard"
-            className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black"
-          >
-            Dashboard
-          </Link>
+          </div>
         </div>
-      </div>
 
-      <section className="mt-6">
-        <SectionTitle
-          eyebrow="Overview"
-          title="Event totals"
-          description="Revenue comes from issued paid tickets. Guest-list tickets are counted separately and do not consume paid-ticket capacity."
-        />
-
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <StatCard label="Page views" value={stats.page_views} />
-          <StatCard
-            label="Conversion"
-            value={formatPercentage(stats.tickets_sold, stats.page_views)}
-            helper="all issued tickets / views"
-          />
-          <StatCard
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <MetricCard
             label="Gross revenue"
             value={formatPrice(stats.gross_revenue_cents)}
+            helper="Issued paid tickets"
+            large
           />
-          <StatCard label="Total issued" value={stats.tickets_sold} />
-          <StatCard
-            label={category === "upcoming" ? "Total remaining" : "Total entrances"}
-            value={
+
+          <MetricCard
+            label="Issued"
+            value={stats.tickets_sold}
+            helper={`${stats.paid_tickets_sold} paid · ${stats.guest_list_tickets_claimed} guest list`}
+            large
+          />
+
+          <MetricCard
+            label={category === "upcoming" ? "Capacity left" : "Entrances"}
+            value={heroThirdMetric}
+            helper={
               category === "upcoming"
-                ? stats.paid_remaining_capacity +
-                  stats.guest_list_remaining_capacity
-                : stats.successful_entrances
+                ? `${stats.paid_remaining_capacity} paid · ${stats.guest_list_remaining_capacity} guest list`
+                : `${stats.paid_successful_entrances} paid · ${stats.guest_list_successful_entrances} guest list`
             }
-          />
-        </div>
-      </section>
-
-      <section className="mt-8">
-        <SectionTitle
-          eyebrow="Capacity pools"
-          title="Paid tickets vs guest list"
-        />
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-            <h3 className="font-semibold text-white">Paid capacity</h3>
-
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <StatCard label="Paid tickets issued" value={stats.paid_tickets_sold} />
-              <StatCard label="Paid capacity left" value={stats.paid_remaining_capacity} />
-
-              {showEntrances ? (
-                <>
-                  <StatCard
-                    label="Paid entrances"
-                    value={stats.paid_successful_entrances}
-                  />
-                  <StatCard
-                    label={category === "past" ? "Paid no-shows" : "Paid still expected"}
-                    value={paidNoShows}
-                  />
-                </>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-            <h3 className="font-semibold text-white">Guest-list capacity</h3>
-
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <StatCard
-                label="Guest-list tickets issued"
-                value={stats.guest_list_tickets_claimed}
-              />
-              <StatCard
-                label="Guest-list capacity left"
-                value={stats.guest_list_remaining_capacity}
-              />
-
-              {showEntrances ? (
-                <>
-                  <StatCard
-                    label="Guest-list entrances"
-                    value={stats.guest_list_successful_entrances}
-                  />
-                  <StatCard
-                    label={
-                      category === "past"
-                        ? "Guest-list no-shows"
-                        : "Guest-list still expected"
-                    }
-                    value={guestListNoShows}
-                  />
-                </>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {category === "ongoing" ? (
-        <section className="mt-8">
-          <SectionTitle eyebrow="Live entrance control" title="Ongoing stats" />
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard label="Total issued" value={stats.tickets_sold} />
-            <StatCard label="Total entrances" value={stats.successful_entrances} />
-            <StatCard label="Still expected" value={stillExpected} />
-            <StatCard
-              label="Duplicate scans"
-              value={stats.duplicate_scan_attempts}
-            />
-            <StatCard
-              label="Invalid scans"
-              value={stats.invalid_scan_attempts}
-            />
-          </div>
-        </section>
-      ) : null}
-
-      {category === "past" ? (
-        <section className="mt-8">
-          <SectionTitle eyebrow="Final result" title="Past event stats" />
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard label="Total issued" value={stats.tickets_sold} />
-            <StatCard label="Total entrances" value={stats.successful_entrances} />
-            <StatCard
-              label="Total no-shows"
-              value={noShows}
-              helper={formatPercentage(noShows, stats.tickets_sold)}
-            />
-            <StatCard
-              label="Check-in rate"
-              value={formatPercentage(
-                stats.successful_entrances,
-                stats.tickets_sold
-              )}
-            />
-            <StatCard
-              label="Duplicate scans"
-              value={stats.duplicate_scan_attempts}
-            />
-          </div>
-        </section>
-      ) : null}
-
-      <section className="mt-8">
-        <SectionTitle eyebrow="Ticket types" title="Breakdown by type" />
-
-        <div className="mt-4 grid gap-6 lg:grid-cols-2">
-          <HorizontalBarChart
-            title="Paid tickets issued by type"
-            rows={paidSoldRows}
-          />
-
-          <HorizontalBarChart
-            title="Guest-list tickets issued by type"
-            rows={guestListRows}
+            large
           />
         </div>
 
-        {showEntrances ? (
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <HorizontalBarChart
-              title="Paid entrances by type"
-              rows={paidEntranceRows}
+        {category === "upcoming" ? (
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <MetricCard
+              label="Page views"
+              value={stats.page_views}
+              helper="Public event page visits"
             />
 
-            <HorizontalBarChart
-              title="Guest-list entrances by type"
-              rows={guestListEntranceRows}
+            <MetricCard
+              label="Conversion"
+              value={formatPercentage(stats.tickets_sold, stats.page_views)}
+              helper="Issued tickets / page views"
             />
           </div>
         ) : null}
       </section>
 
-      {category === "past" ? (
-        <div className="mt-8">
-          <EntranceTimelineChart rows={entranceTimeStats} />
+      <section className="grid gap-6 p-8 md:p-10 lg:grid-cols-2">
+        <CapacityCard
+          title="Paid tickets"
+          issued={stats.paid_tickets_sold}
+          remaining={stats.paid_remaining_capacity}
+          entrances={stats.paid_successful_entrances}
+          capacity={paidCapacity}
+          showEntrances={showEntrances}
+        />
+
+        <CapacityCard
+          title="Guest list"
+          issued={stats.guest_list_tickets_claimed}
+          remaining={stats.guest_list_remaining_capacity}
+          entrances={stats.guest_list_successful_entrances}
+          capacity={guestListCapacity}
+          showEntrances={showEntrances}
+        />
+      </section>
+
+      <section className="grid gap-6 border-t border-white/10 p-8 md:p-10 lg:grid-cols-[1fr_380px]">
+        <TicketMix
+          ticketTypeStats={ticketTypeStats}
+          showEntrances={showEntrances}
+        />
+
+        <div className="grid gap-6">
+          <OperationalSummary category={category} stats={stats} />
+
+          {category === "past" ? (
+            <EntranceTimeline rows={entranceTimeStats} />
+          ) : null}
         </div>
-      ) : null}
-
-      <section className="mt-8 grid gap-6">
-        <TicketTypeTable
-          title="Paid ticket type details"
-          ticketTypeStats={paidTicketTypes}
-          showEntrances={showEntrances}
-        />
-
-        <TicketTypeTable
-          title="Guest-list ticket type details"
-          ticketTypeStats={guestListTicketTypes}
-          showEntrances={showEntrances}
-        />
       </section>
     </div>
   );
