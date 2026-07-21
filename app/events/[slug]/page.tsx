@@ -6,6 +6,7 @@ import {
   getPublicEventBySlug,
   getPublicTicketTypesForEvent,
 } from "../../../lib/events/get-event";
+import { recordEventPageView } from "../../../lib/events/record-event-page-view";
 import { getUserTicketForEvent } from "../../../lib/tickets/get-user-ticket-for-event";
 import { getBaseUrl } from "../../../lib/url/get-base-url";
 
@@ -41,6 +42,7 @@ export default async function PublicEventPage({
   const [user, ticketTypes] = await Promise.all([
     getUser(),
     getPublicTicketTypesForEvent(event.id),
+    recordEventPageView(event.id),
   ]);
 
   const existingTicket = user
