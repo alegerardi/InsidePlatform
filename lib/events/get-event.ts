@@ -32,6 +32,7 @@ export type PublicTicketType = {
   currency: string;
   capacity_pool: TicketCapacityPool;
   sort_order: number;
+  is_sold_out: boolean;
 };
 
 export async function getPublicEventBySlug(slug: string) {
@@ -56,17 +57,23 @@ export async function getPublicEventBySlug(slug: string) {
 export async function getPublicTicketTypesForEvent(eventId: string) {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("ticket_types")
-    .select(
-      "id, event_id, title, description, price_cents, currency, capacity_pool, sort_order"
-    )
-    .eq("event_id", eventId)
-    .eq("is_active", true)
-    .order("capacity_pool", { ascending: true })
-    .order("sort_order", { ascending: true });
+  const { data, error } = await supabase.rpc(
+    "get_public_ticket_types_for_event",
+    {
+      target_event_id: eventId,
+    }
+  );
 
   if (error || !data) {
+    if (error) {
+      console.warn("getPublicTicketTypesForEvent error", {
+        errorCode: error.code,
+        errorMessage: error.message,
+        errorDetails: error.details,
+        errorHint: error.hint,
+      });
+    }
+
     return [];
   }
 

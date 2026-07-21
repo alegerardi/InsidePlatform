@@ -27,16 +27,25 @@ function TicketTypeCard({
   ticketType: PublicTicketType;
   defaultChecked: boolean;
 }) {
+  const isSoldOut = ticketType.is_sold_out;
+
   return (
-    <label className="group block cursor-pointer rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/30 hover:bg-white/[0.05] has-[:checked]:border-white has-[:checked]:bg-white/[0.08]">
+    <label
+      className={
+        isSoldOut
+          ? "block rounded-2xl border border-white/10 bg-white/[0.02] p-5 opacity-45"
+          : "group block cursor-pointer rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/30 hover:bg-white/[0.05] has-[:checked]:border-white has-[:checked]:bg-white/[0.08]"
+      }
+    >
       <div className="flex items-start gap-4">
         <input
           type="radio"
           name="ticket_type_id"
           value={ticketType.id}
           required
-          defaultChecked={defaultChecked}
-          className="mt-1 h-4 w-4 accent-white"
+          disabled={isSoldOut}
+          defaultChecked={!isSoldOut && defaultChecked}
+          className="mt-1 h-4 w-4 accent-white disabled:cursor-not-allowed"
         />
 
         <div className="min-w-0 flex-1">
@@ -50,6 +59,12 @@ function TicketTypeCard({
                 <span className="rounded-full border border-white/15 px-2.5 py-1 text-xs font-medium text-white/70">
                   {getPoolLabel(ticketType)}
                 </span>
+
+                {isSoldOut ? (
+                  <span className="rounded-full border border-white/15 px-2.5 py-1 text-xs font-medium text-white/50">
+                    Sold out
+                  </span>
+                ) : null}
               </div>
 
               {ticketType.description ? (
@@ -75,6 +90,10 @@ export function ClaimTicketForm({
   ticketTypes,
   existingTicketId,
 }: ClaimTicketFormProps) {
+  const availableTicketTypes = ticketTypes.filter(
+    (ticketType) => !ticketType.is_sold_out
+  );
+
   const paidTicketTypes = ticketTypes.filter(
     (ticketType) => ticketType.capacity_pool === "paid"
   );
@@ -83,7 +102,8 @@ export function ClaimTicketForm({
     (ticketType) => ticketType.capacity_pool === "guest_list"
   );
 
-  const firstTicketTypeId = ticketTypes[0]?.id;
+  const firstAvailableTicketTypeId = availableTicketTypes[0]?.id;
+  const hasAvailableTickets = availableTicketTypes.length > 0;
 
   if (existingTicketId) {
     return (
@@ -139,7 +159,7 @@ export function ClaimTicketForm({
               <TicketTypeCard
                 key={ticketType.id}
                 ticketType={ticketType}
-                defaultChecked={ticketType.id === firstTicketTypeId}
+                defaultChecked={ticketType.id === firstAvailableTicketTypeId}
               />
             ))}
           </div>
@@ -153,7 +173,7 @@ export function ClaimTicketForm({
               <TicketTypeCard
                 key={ticketType.id}
                 ticketType={ticketType}
-                defaultChecked={ticketType.id === firstTicketTypeId}
+                defaultChecked={ticketType.id === firstAvailableTicketTypeId}
               />
             ))}
           </div>
@@ -162,9 +182,14 @@ export function ClaimTicketForm({
 
       <button
         type="submit"
-        className="mt-6 w-full rounded-xl bg-white px-5 py-4 text-sm font-semibold text-black transition hover:opacity-85"
+        disabled={!hasAvailableTickets}
+        className={
+          hasAvailableTickets
+            ? "mt-6 w-full rounded-xl bg-white px-5 py-4 text-sm font-semibold text-black transition hover:opacity-85"
+            : "mt-6 w-full cursor-not-allowed rounded-xl border border-white/10 px-5 py-4 text-sm font-semibold text-white/40"
+        }
       >
-        Continue
+        {hasAvailableTickets ? "Continue" : "Sold out"}
       </button>
     </form>
   );
