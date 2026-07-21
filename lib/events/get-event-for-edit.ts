@@ -1,5 +1,7 @@
 import { createClient } from "../supabase/server";
 
+export type TicketCapacityPool = "paid" | "guest_list";
+
 export type EditableTicketType = {
   id: string;
   event_id: string;
@@ -8,6 +10,7 @@ export type EditableTicketType = {
   price_cents: number;
   currency: string;
   max_quantity: number | null;
+  capacity_pool: TicketCapacityPool;
   is_active: boolean;
   sort_order: number;
 };
@@ -56,7 +59,7 @@ export async function getEventForEdit(
   const { data: ticketTypes, error: ticketTypesError } = await supabase
     .from("ticket_types")
     .select(
-      "id, event_id, title, description, price_cents, currency, max_quantity, is_active, sort_order"
+      "id, event_id, title, description, price_cents, currency, max_quantity, capacity_pool, is_active, sort_order"
     )
     .eq("event_id", event.id)
     .eq("is_active", true)

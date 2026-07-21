@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { requireUser } from "../auth/require-user";
 import { createClient } from "../supabase/server";
 
+type TicketCapacityPool = "paid" | "guest_list";
+
 type UpdateEventResponse = {
   success: boolean;
   result:
@@ -25,6 +27,7 @@ type ParsedTicketType = {
   description: string | null;
   price_cents: number;
   max_quantity: number | null;
+  capacity_pool: TicketCapacityPool;
 };
 
 function getString(formData: FormData, key: string) {
@@ -91,6 +94,10 @@ function parseOptionalPositiveInteger(value: string) {
   return parsed;
 }
 
+function parseCapacityPool(value: string): TicketCapacityPool {
+  return value === "guest_list" ? "guest_list" : "paid";
+}
+
 function parseTicketTypes(
   formData: FormData,
   eventSlug: string
@@ -105,6 +112,9 @@ function parseTicketTypes(
     const maxQuantityValue = getString(
       formData,
       `ticket_type_${index}_max_quantity`
+    );
+    const capacityPool = parseCapacityPool(
+      getString(formData, `ticket_type_${index}_capacity_pool`)
     );
 
     const hasVisibleValue = Boolean(
@@ -149,6 +159,7 @@ function parseTicketTypes(
       description: description || null,
       price_cents: priceCents,
       max_quantity: maxQuantity,
+      capacity_pool: capacityPool,
     });
   }
 
@@ -198,11 +209,55 @@ export async function updateEventAction(formData: FormData) {
   }
 
   if (!Number.isInteger(maxTickets) || maxTickets < 1) {
-    redirectToEdit(eventSlug, "error", "Maximum tickets must be at least 1.");
+    redirectToEdit(eventSlug, "error", "Paid-ticket capacity must be at least 1.");
   }
 
   if (!Number.isInteger(maxGuestList) || maxGuestList < 0) {
-    redirectToEdit(eventSlug, "error", "Guest-list limit cannot be negative.");
+    redirectToEdit(eventSlug, "error", "Guest-list capacity cannot be negative.");
+  }
+
+  const hasGuestListType = ticketTypes.some(
+    (ticketType) => ticketType.capacity_pool === "guest_list"
+  );
+
+  if (hasGuestListType && maxGuestList < 1) {
+    redirectToEdit(
+      eventSlug,
+      "error",
+      "Guest-list capacity must be at least 1 if you create a guest-list ticket type."
+    );
+  }
+
+  const paidTicketTypeCapacity = ticketTypes.reduce((total, ticketType) => {
+    if (ticketType.capacity_pool !== "paid") {
+      return total;
+    }
+
+    return total + (ticketType.max_quantity ?? 0);
+  }, 0);
+
+  const guestListTicketTypeCapacity = ticketTypes.reduce((total, ticketType) => {
+    if (ticketType.capacity_pool !== "guest_list") {
+      return total;
+    }
+
+    return total + (ticketType.max_quantity ?? 0);
+  }, 0);
+
+  if (paidTicketTypeCapacity > maxTickets) {
+    redirectToEdit(
+      eventSlug,
+      "error",
+      "The sum of paid ticket type quantities cannot be greater than the paid-ticket capacity."
+    );
+  }
+
+  if (guestListTicketTypeCapacity > maxGuestList) {
+    redirectToEdit(
+      eventSlug,
+      "error",
+      "The sum of guest-list ticket type quantities cannot be greater than the guest-list capacity."
+    );
   }
 
   const supabase = await createClient();
@@ -278,6 +333,7 @@ export async function updateEventAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath(`/events/${eventSlug}`);
   revalidatePath(`/events/${eventSlug}/edit`);
+  revalidatePath(`/events/${eventSlug}/stats`);
 
   const safeMessage =
     result.result === "error" && result.debug_id

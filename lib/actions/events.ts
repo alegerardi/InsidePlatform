@@ -6,12 +6,15 @@ import { requireUser } from "../auth/require-user";
 import { randomSlugSuffix, slugify } from "../events/slugify";
 import { createClient } from "../supabase/server";
 
+type TicketCapacityPool = "paid" | "guest_list";
+
 type ParsedTicketType = {
   title: string;
   description: string | null;
   price_cents: number;
   currency: "EUR";
   max_quantity: number | null;
+  capacity_pool: TicketCapacityPool;
   sort_order: number;
 };
 
@@ -95,6 +98,10 @@ function parseOptionalPositiveInteger(value: string) {
   return parsed;
 }
 
+function parseCapacityPool(value: string): TicketCapacityPool {
+  return value === "guest_list" ? "guest_list" : "paid";
+}
+
 function parseTicketTypes(formData: FormData): ParsedTicketType[] {
   const ticketTypes: ParsedTicketType[] = [];
 
@@ -103,6 +110,9 @@ function parseTicketTypes(formData: FormData): ParsedTicketType[] {
     const description = getString(formData, `ticket_type_${index}_description`);
     const priceValue = getString(formData, `ticket_type_${index}_price`);
     const maxQuantityValue = getString(formData, `ticket_type_${index}_max_quantity`);
+    const capacityPool = parseCapacityPool(
+      getString(formData, `ticket_type_${index}_capacity_pool`)
+    );
 
     const hasAnyValue = Boolean(title || description || priceValue || maxQuantityValue);
 
@@ -136,6 +146,7 @@ function parseTicketTypes(formData: FormData): ParsedTicketType[] {
       price_cents: priceCents,
       currency: "EUR",
       max_quantity: maxQuantity,
+      capacity_pool: capacityPool,
       sort_order: index - 1,
     });
   }
@@ -192,8 +203,7 @@ async function insertEventWithSlug(params: {
     }
 
     const isUniqueSlugError =
-      error?.code === "23505" ||
-      error?.message?.toLowerCase().includes("duplicate");
+      error?.code === "23505" || error?.message?.toLowerCase().includes("duplicate");
 
     if (!isUniqueSlugError) {
       throw new Error(error?.message ?? "Failed to create event.");
@@ -216,6 +226,7 @@ async function insertTicketTypes(params: {
     price_cents: ticketType.price_cents,
     currency: ticketType.currency,
     max_quantity: ticketType.max_quantity,
+    capacity_pool: ticketType.capacity_pool,
     is_active: true,
     sort_order: ticketType.sort_order,
   }));
@@ -248,6 +259,7 @@ export async function createEventAction(formData: FormData) {
   const maxGuestList = getInteger(formData, "max_guest_list");
   const ticketTypes = parseTicketTypes(formData);
 
+
   if (!title) {
     redirectWithError("Event title is required.");
   }
@@ -277,20 +289,48 @@ export async function createEventAction(formData: FormData) {
   }
 
   if (!Number.isInteger(maxTickets) || maxTickets < 1) {
-    redirectWithError("Maximum tickets must be at least 1.");
+    redirectWithError("Paid-ticket capacity must be at least 1.");
   }
 
   if (!Number.isInteger(maxGuestList) || maxGuestList < 0) {
-    redirectWithError("Guest list limit cannot be negative.");
+    redirectWithError("Guest-list capacity cannot be negative.");
   }
 
-  const totalTicketTypeCapacity = ticketTypes.reduce((total, ticketType) => {
+  const hasGuestListType = ticketTypes.some(
+    (ticketType) => ticketType.capacity_pool === "guest_list"
+  );
+
+  if (hasGuestListType && maxGuestList < 1) {
+    redirectWithError(
+      "Guest-list capacity must be at least 1 if you create a guest-list ticket type."
+    );
+  }
+
+  const paidTicketTypeCapacity = ticketTypes.reduce((total, ticketType) => {
+    if (ticketType.capacity_pool !== "paid") {
+      return total;
+    }
+
     return total + (ticketType.max_quantity ?? 0);
   }, 0);
 
-  if (totalTicketTypeCapacity > maxTickets) {
+  const guestListTicketTypeCapacity = ticketTypes.reduce((total, ticketType) => {
+    if (ticketType.capacity_pool !== "guest_list") {
+      return total;
+    }
+
+    return total + (ticketType.max_quantity ?? 0);
+  }, 0);
+
+  if (paidTicketTypeCapacity > maxTickets) {
     redirectWithError(
-      "The sum of ticket type quantities cannot be greater than the event maximum tickets."
+      "The sum of paid ticket type quantities cannot be greater than the paid-ticket capacity."
+    );
+  }
+
+  if (guestListTicketTypeCapacity > maxGuestList) {
+    redirectWithError(
+      "The sum of guest-list ticket type quantities cannot be greater than the guest-list capacity."
     );
   }
 

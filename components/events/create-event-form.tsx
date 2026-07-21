@@ -4,6 +4,110 @@ type CreateEventFormProps = {
   error?: string;
 };
 
+function TicketTypeFields({
+  number,
+  required = false,
+  defaultTitle = "",
+  defaultDescription = "",
+  defaultPrice = "",
+  defaultQuantity = "",
+}: {
+  number: number;
+  required?: boolean;
+  defaultTitle?: string;
+  defaultDescription?: string;
+  defaultPrice?: string;
+  defaultQuantity?: string;
+}) {
+  return (
+    <div className="rounded-md border border-dashed p-4">
+      <h3 className="font-medium">
+        Ticket type {number} {required ? "" : "optional"}
+      </h3>
+
+      <div className="mt-4 grid gap-4">
+        <div className="flex flex-col gap-2">
+          <label htmlFor={`ticket_type_${number}_title`} className="text-sm font-medium">
+            Title
+          </label>
+          <input
+            id={`ticket_type_${number}_title`}
+            name={`ticket_type_${number}_title`}
+            type="text"
+            required={required}
+            defaultValue={defaultTitle}
+            placeholder={number === 2 ? "VIP" : number === 3 ? "Guest List" : "General Admission"}
+            className="rounded-md border px-3 py-2"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor={`ticket_type_${number}_description`} className="text-sm font-medium">
+            Description
+          </label>
+          <textarea
+            id={`ticket_type_${number}_description`}
+            name={`ticket_type_${number}_description`}
+            rows={2}
+            defaultValue={defaultDescription}
+            placeholder={number === 3 ? "Free guest-list entrance." : ""}
+            className="rounded-md border px-3 py-2"
+          />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="flex flex-col gap-2">
+            <label htmlFor={`ticket_type_${number}_price`} className="text-sm font-medium">
+              Price in euros
+            </label>
+            <input
+              id={`ticket_type_${number}_price`}
+              name={`ticket_type_${number}_price`}
+              type="number"
+              min={0}
+              step="0.01"
+              required={required}
+              defaultValue={defaultPrice}
+              placeholder={number === 2 ? "25.00" : number === 3 ? "0.00" : "10.00"}
+              className="rounded-md border px-3 py-2"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label htmlFor={`ticket_type_${number}_max_quantity`} className="text-sm font-medium">
+              Max quantity
+            </label>
+            <input
+              id={`ticket_type_${number}_max_quantity`}
+              name={`ticket_type_${number}_max_quantity`}
+              type="number"
+              min={1}
+              defaultValue={defaultQuantity}
+              placeholder={number === 2 ? "20" : number === 3 ? "30" : "150"}
+              className="rounded-md border px-3 py-2"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label htmlFor={`ticket_type_${number}_capacity_pool`} className="text-sm font-medium">
+              Capacity pool
+            </label>
+            <select
+              id={`ticket_type_${number}_capacity_pool`}
+              name={`ticket_type_${number}_capacity_pool`}
+              defaultValue={number === 3 ? "guest_list" : "paid"}
+              className="rounded-md border px-3 py-2"
+            >
+              <option value="paid">Paid capacity</option>
+              <option value="guest_list">Guest-list capacity</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CreateEventForm({ error }: CreateEventFormProps) {
   return (
     <form action={createEventAction} className="flex w-full max-w-2xl flex-col gap-5">
@@ -78,7 +182,7 @@ export function CreateEventForm({ error }: CreateEventFormProps) {
       <div className="grid gap-5 md:grid-cols-2">
         <div className="flex flex-col gap-2">
           <label htmlFor="max_tickets" className="text-sm font-medium">
-            Maximum tickets
+            Paid-ticket capacity
           </label>
           <input
             id="max_tickets"
@@ -89,11 +193,14 @@ export function CreateEventForm({ error }: CreateEventFormProps) {
             defaultValue={150}
             className="rounded-md border px-3 py-2"
           />
+          <p className="text-xs text-gray-500">
+            Paid ticket types consume this capacity.
+          </p>
         </div>
 
         <div className="flex flex-col gap-2">
           <label htmlFor="max_guest_list" className="text-sm font-medium">
-            Maximum guest-list entries
+            Guest-list capacity
           </label>
           <input
             id="max_guest_list"
@@ -101,9 +208,12 @@ export function CreateEventForm({ error }: CreateEventFormProps) {
             type="number"
             min={0}
             required
-            defaultValue={0}
+            defaultValue={30}
             className="rounded-md border px-3 py-2"
           />
+          <p className="text-xs text-gray-500">
+            Guest-list ticket types consume this capacity.
+          </p>
         </div>
       </div>
 
@@ -111,201 +221,28 @@ export function CreateEventForm({ error }: CreateEventFormProps) {
         <div>
           <h2 className="text-lg font-semibold">Ticket types</h2>
           <p className="mt-1 text-sm text-gray-600">
-            Add up to 3 ticket types for now. You can leave ticket type 2 and 3 empty.
+            Choose whether each ticket type consumes paid-ticket capacity or guest-list capacity.
           </p>
         </div>
 
         <div className="mt-5 grid gap-6">
-          <div className="rounded-md border border-dashed p-4">
-            <h3 className="font-medium">Ticket type 1</h3>
+          <TicketTypeFields
+            number={1}
+            required
+            defaultTitle="General Admission"
+            defaultDescription="Standard entrance ticket."
+            defaultPrice="10.00"
+          />
 
-            <div className="mt-4 grid gap-4">
-              <div className="flex flex-col gap-2">
-                <label htmlFor="ticket_type_1_title" className="text-sm font-medium">
-                  Title
-                </label>
-                <input
-                  id="ticket_type_1_title"
-                  name="ticket_type_1_title"
-                  type="text"
-                  required
-                  defaultValue="General Admission"
-                  className="rounded-md border px-3 py-2"
-                />
-              </div>
+          <TicketTypeFields number={2} />
 
-              <div className="flex flex-col gap-2">
-                <label htmlFor="ticket_type_1_description" className="text-sm font-medium">
-                  Description
-                </label>
-                <textarea
-                  id="ticket_type_1_description"
-                  name="ticket_type_1_description"
-                  rows={2}
-                  defaultValue="Standard entrance ticket."
-                  className="rounded-md border px-3 py-2"
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <label htmlFor="ticket_type_1_price" className="text-sm font-medium">
-                    Price in euros
-                  </label>
-                  <input
-                    id="ticket_type_1_price"
-                    name="ticket_type_1_price"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    required
-                    defaultValue="10.00"
-                    className="rounded-md border px-3 py-2"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label htmlFor="ticket_type_1_max_quantity" className="text-sm font-medium">
-                    Max quantity
-                  </label>
-                  <input
-                    id="ticket_type_1_max_quantity"
-                    name="ticket_type_1_max_quantity"
-                    type="number"
-                    min={1}
-                    placeholder="150"
-                    className="rounded-md border px-3 py-2"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-md border border-dashed p-4">
-            <h3 className="font-medium">Ticket type 2 optional</h3>
-
-            <div className="mt-4 grid gap-4">
-              <div className="flex flex-col gap-2">
-                <label htmlFor="ticket_type_2_title" className="text-sm font-medium">
-                  Title
-                </label>
-                <input
-                  id="ticket_type_2_title"
-                  name="ticket_type_2_title"
-                  type="text"
-                  placeholder="VIP"
-                  className="rounded-md border px-3 py-2"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label htmlFor="ticket_type_2_description" className="text-sm font-medium">
-                  Description
-                </label>
-                <textarea
-                  id="ticket_type_2_description"
-                  name="ticket_type_2_description"
-                  rows={2}
-                  placeholder="Fast entrance, reserved area, etc."
-                  className="rounded-md border px-3 py-2"
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <label htmlFor="ticket_type_2_price" className="text-sm font-medium">
-                    Price in euros
-                  </label>
-                  <input
-                    id="ticket_type_2_price"
-                    name="ticket_type_2_price"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    placeholder="25.00"
-                    className="rounded-md border px-3 py-2"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label htmlFor="ticket_type_2_max_quantity" className="text-sm font-medium">
-                    Max quantity
-                  </label>
-                  <input
-                    id="ticket_type_2_max_quantity"
-                    name="ticket_type_2_max_quantity"
-                    type="number"
-                    min={1}
-                    placeholder="20"
-                    className="rounded-md border px-3 py-2"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-md border border-dashed p-4">
-            <h3 className="font-medium">Ticket type 3 optional</h3>
-
-            <div className="mt-4 grid gap-4">
-              <div className="flex flex-col gap-2">
-                <label htmlFor="ticket_type_3_title" className="text-sm font-medium">
-                  Title
-                </label>
-                <input
-                  id="ticket_type_3_title"
-                  name="ticket_type_3_title"
-                  type="text"
-                  placeholder="Early Bird"
-                  className="rounded-md border px-3 py-2"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label htmlFor="ticket_type_3_description" className="text-sm font-medium">
-                  Description
-                </label>
-                <textarea
-                  id="ticket_type_3_description"
-                  name="ticket_type_3_description"
-                  rows={2}
-                  placeholder="Discounted first batch."
-                  className="rounded-md border px-3 py-2"
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <label htmlFor="ticket_type_3_price" className="text-sm font-medium">
-                    Price in euros
-                  </label>
-                  <input
-                    id="ticket_type_3_price"
-                    name="ticket_type_3_price"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    placeholder="7.00"
-                    className="rounded-md border px-3 py-2"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label htmlFor="ticket_type_3_max_quantity" className="text-sm font-medium">
-                    Max quantity
-                  </label>
-                  <input
-                    id="ticket_type_3_max_quantity"
-                    name="ticket_type_3_max_quantity"
-                    type="number"
-                    min={1}
-                    placeholder="50"
-                    className="rounded-md border px-3 py-2"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+          <TicketTypeFields
+            number={3}
+            defaultTitle="Guest List"
+            defaultDescription="Free guest-list entrance."
+            defaultPrice="0.00"
+            defaultQuantity="30"
+          />
         </div>
       </section>
 
