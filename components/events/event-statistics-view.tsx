@@ -1,10 +1,10 @@
 import Link from "next/link";
+import type { StatsEvent } from "../../lib/events/get-event-for-stats";
 import type {
   OrganizerEntranceTimeStats,
   OrganizerEventStats,
   OrganizerTicketTypeStats,
 } from "../../lib/events/get-organizer-event-stats";
-import type { StatsEvent } from "../../lib/events/get-event-for-stats";
 
 type EventCategory = "upcoming" | "ongoing" | "past";
 
@@ -48,15 +48,28 @@ function formatPercentage(numerator: number, denominator: number) {
 function getFallbackStats(eventId: string): OrganizerEventStats {
   return {
     event_id: eventId,
+
     tickets_sold: 0,
+    paid_tickets_sold: 0,
+    guest_list_tickets_claimed: 0,
+
     active_tickets: 0,
     used_tickets: 0,
     cancelled_tickets: 0,
+
     gross_revenue_cents: 0,
+
     successful_entrances: 0,
+    paid_successful_entrances: 0,
+    guest_list_successful_entrances: 0,
+
     duplicate_scan_attempts: 0,
     invalid_scan_attempts: 0,
+
     event_remaining_capacity: 0,
+    paid_remaining_capacity: 0,
+    guest_list_remaining_capacity: 0,
+
     page_views: 0,
   };
 }
@@ -75,6 +88,32 @@ function StatCard({
       <p className="text-sm text-zinc-400">{label}</p>
       <p className="mt-2 text-3xl font-semibold text-white">{value}</p>
       {helper ? <p className="mt-2 text-xs text-zinc-500">{helper}</p> : null}
+    </div>
+  );
+}
+
+function SectionTitle({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div>
+      {eyebrow ? (
+        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+          {eyebrow}
+        </p>
+      ) : null}
+
+      <h2 className="mt-1 text-xl font-semibold text-white">{title}</h2>
+
+      {description ? (
+        <p className="mt-2 text-sm text-zinc-400">{description}</p>
+      ) : null}
     </div>
   );
 }
@@ -133,87 +172,91 @@ function HorizontalBarChart({
 }
 
 function TicketTypeTable({
+  title,
   ticketTypeStats,
   showEntrances,
 }: {
+  title: string;
   ticketTypeStats: OrganizerTicketTypeStats[];
   showEntrances: boolean;
 }) {
-  if (ticketTypeStats.length === 0) {
-    return (
-      <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-        <h3 className="font-semibold text-white">Ticket type details</h3>
-        <p className="mt-3 text-sm text-zinc-400">No ticket types found.</p>
-      </section>
-    );
-  }
-
   return (
     <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-      <h3 className="font-semibold text-white">Ticket type details</h3>
+      <h3 className="font-semibold text-white">{title}</h3>
 
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-zinc-800 text-left text-zinc-400">
-              <th className="py-3 pr-4 font-medium">Type</th>
-              <th className="py-3 pr-4 font-medium">Price</th>
-              <th className="py-3 pr-4 font-medium">Sold</th>
-              {showEntrances ? (
-                <th className="py-3 pr-4 font-medium">Entrances</th>
-              ) : null}
-              <th className="py-3 pr-4 font-medium">Remaining</th>
-              <th className="py-3 pr-4 font-medium">Revenue</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {ticketTypeStats.map((ticketType) => (
-              <tr
-                key={ticketType.ticket_type_id}
-                className="border-b border-zinc-800 last:border-0"
-              >
-                <td className="py-3 pr-4 text-zinc-100">
-                  <span className="font-medium">
-                    {ticketType.ticket_type_title}
-                  </span>
-
-                  {!ticketType.is_active ? (
-                    <span className="ml-2 rounded-full border border-zinc-700 px-2 py-0.5 text-xs text-zinc-500">
-                      inactive
-                    </span>
-                  ) : null}
-                </td>
-
-                <td className="py-3 pr-4 text-zinc-300">
-                  {formatPrice(ticketType.price_cents, ticketType.currency)}
-                </td>
-
-                <td className="py-3 pr-4 text-zinc-300">
-                  {ticketType.sold_count}
-                </td>
-
+      {ticketTypeStats.length === 0 ? (
+        <p className="mt-3 text-sm text-zinc-400">No ticket types found.</p>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[760px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800 text-left text-zinc-400">
+                <th className="py-3 pr-4 font-medium">Type</th>
+                <th className="py-3 pr-4 font-medium">Pool</th>
+                <th className="py-3 pr-4 font-medium">Price</th>
+                <th className="py-3 pr-4 font-medium">Issued</th>
                 {showEntrances ? (
-                  <td className="py-3 pr-4 text-zinc-300">
-                    {ticketType.successful_entrances}
-                  </td>
+                  <th className="py-3 pr-4 font-medium">Entrances</th>
                 ) : null}
-
-                <td className="py-3 pr-4 text-zinc-300">
-                  {ticketType.remaining_quantity ?? "Unlimited"}
-                </td>
-
-                <td className="py-3 pr-4 text-zinc-300">
-                  {formatPrice(
-                    ticketType.gross_revenue_cents,
-                    ticketType.currency
-                  )}
-                </td>
+                <th className="py-3 pr-4 font-medium">Type remaining</th>
+                <th className="py-3 pr-4 font-medium">Revenue</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+
+            <tbody>
+              {ticketTypeStats.map((ticketType) => (
+                <tr
+                  key={ticketType.ticket_type_id}
+                  className="border-b border-zinc-800 last:border-0"
+                >
+                  <td className="py-3 pr-4 text-zinc-100">
+                    <span className="font-medium">
+                      {ticketType.ticket_type_title}
+                    </span>
+
+                    {!ticketType.is_active ? (
+                      <span className="ml-2 rounded-full border border-zinc-700 px-2 py-0.5 text-xs text-zinc-500">
+                        inactive
+                      </span>
+                    ) : null}
+                  </td>
+
+                  <td className="py-3 pr-4 text-zinc-300">
+                    {ticketType.capacity_pool === "guest_list"
+                      ? "Guest list"
+                      : "Paid"}
+                  </td>
+
+                  <td className="py-3 pr-4 text-zinc-300">
+                    {formatPrice(ticketType.price_cents, ticketType.currency)}
+                  </td>
+
+                  <td className="py-3 pr-4 text-zinc-300">
+                    {ticketType.sold_count}
+                  </td>
+
+                  {showEntrances ? (
+                    <td className="py-3 pr-4 text-zinc-300">
+                      {ticketType.successful_entrances}
+                    </td>
+                  ) : null}
+
+                  <td className="py-3 pr-4 text-zinc-300">
+                    {ticketType.remaining_quantity ?? "Unlimited"}
+                  </td>
+
+                  <td className="py-3 pr-4 text-zinc-300">
+                    {formatPrice(
+                      ticketType.gross_revenue_cents,
+                      ticketType.currency
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
@@ -243,8 +286,11 @@ function EntranceTimelineChart({
                   <span className="font-medium text-zinc-200">
                     {formatTime(row.bucket_start)}
                   </span>
+
                   <span className="text-zinc-400">
-                    {row.successful_entrances}
+                    {row.successful_entrances} total ·{" "}
+                    {row.paid_successful_entrances} paid ·{" "}
+                    {row.guest_list_successful_entrances} guest
                   </span>
                 </div>
 
@@ -276,6 +322,36 @@ export function EventStatisticsView({
 }: EventStatisticsViewProps) {
   const stats = eventStats ?? getFallbackStats(event.id);
 
+  const paidTicketTypes = ticketTypeStats.filter(
+    (ticketType) => ticketType.capacity_pool === "paid"
+  );
+
+  const guestListTicketTypes = ticketTypeStats.filter(
+    (ticketType) => ticketType.capacity_pool === "guest_list"
+  );
+
+  const paidSoldRows = paidTicketTypes.map((ticketType) => ({
+    label: ticketType.ticket_type_title,
+    value: ticketType.sold_count,
+    helper: formatPrice(ticketType.gross_revenue_cents, ticketType.currency),
+  }));
+
+  const guestListRows = guestListTicketTypes.map((ticketType) => ({
+    label: ticketType.ticket_type_title,
+    value: ticketType.sold_count,
+    helper: `${ticketType.remaining_quantity ?? "Unlimited"} remaining in this type`,
+  }));
+
+  const paidEntranceRows = paidTicketTypes.map((ticketType) => ({
+    label: ticketType.ticket_type_title,
+    value: ticketType.successful_entrances,
+  }));
+
+  const guestListEntranceRows = guestListTicketTypes.map((ticketType) => ({
+    label: ticketType.ticket_type_title,
+    value: ticketType.successful_entrances,
+  }));
+
   const stillExpected = Math.max(
     stats.tickets_sold - stats.successful_entrances,
     0
@@ -283,16 +359,15 @@ export function EventStatisticsView({
 
   const noShows = Math.max(stats.tickets_sold - stats.successful_entrances, 0);
 
-  const soldRows = ticketTypeStats.map((ticketType) => ({
-    label: ticketType.ticket_type_title,
-    value: ticketType.sold_count,
-    helper: formatPrice(ticketType.gross_revenue_cents, ticketType.currency),
-  }));
+  const paidNoShows = Math.max(
+    stats.paid_tickets_sold - stats.paid_successful_entrances,
+    0
+  );
 
-  const entranceRows = ticketTypeStats.map((ticketType) => ({
-    label: ticketType.ticket_type_title,
-    value: ticketType.successful_entrances,
-  }));
+  const guestListNoShows = Math.max(
+    stats.guest_list_tickets_claimed - stats.guest_list_successful_entrances,
+    0
+  );
 
   const showEntrances = category !== "upcoming";
 
@@ -332,78 +407,129 @@ export function EventStatisticsView({
         </div>
       </div>
 
-      {category === "upcoming" ? (
-        <>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard label="Page views" value={stats.page_views} />
-            <StatCard label="Tickets sold" value={stats.tickets_sold} />
-            <StatCard
-              label="Conversion"
-              value={formatPercentage(stats.tickets_sold, stats.page_views)}
-              helper="tickets / views"
-            />
-            <StatCard
-              label="Gross revenue"
-              value={formatPrice(stats.gross_revenue_cents)}
-            />
-            <StatCard
-              label="Remaining capacity"
-              value={stats.event_remaining_capacity}
-            />
+      <section className="mt-6">
+        <SectionTitle
+          eyebrow="Overview"
+          title="Event totals"
+          description="Revenue comes from issued paid tickets. Guest-list tickets are counted separately and do not consume paid-ticket capacity."
+        />
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard label="Page views" value={stats.page_views} />
+          <StatCard
+            label="Conversion"
+            value={formatPercentage(stats.tickets_sold, stats.page_views)}
+            helper="all issued tickets / views"
+          />
+          <StatCard
+            label="Gross revenue"
+            value={formatPrice(stats.gross_revenue_cents)}
+          />
+          <StatCard label="Total issued" value={stats.tickets_sold} />
+          <StatCard
+            label={category === "upcoming" ? "Total remaining" : "Total entrances"}
+            value={
+              category === "upcoming"
+                ? stats.paid_remaining_capacity +
+                  stats.guest_list_remaining_capacity
+                : stats.successful_entrances
+            }
+          />
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <SectionTitle
+          eyebrow="Capacity pools"
+          title="Paid tickets vs guest list"
+        />
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+            <h3 className="font-semibold text-white">Paid capacity</h3>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <StatCard label="Paid tickets issued" value={stats.paid_tickets_sold} />
+              <StatCard label="Paid capacity left" value={stats.paid_remaining_capacity} />
+
+              {showEntrances ? (
+                <>
+                  <StatCard
+                    label="Paid entrances"
+                    value={stats.paid_successful_entrances}
+                  />
+                  <StatCard
+                    label={category === "past" ? "Paid no-shows" : "Paid still expected"}
+                    value={paidNoShows}
+                  />
+                </>
+              ) : null}
+            </div>
           </div>
 
-          <div className="mt-6 grid gap-6">
-            <HorizontalBarChart title="Tickets sold by type" rows={soldRows} />
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+            <h3 className="font-semibold text-white">Guest-list capacity</h3>
 
-            <TicketTypeTable
-              ticketTypeStats={ticketTypeStats}
-              showEntrances={false}
-            />
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <StatCard
+                label="Guest-list tickets issued"
+                value={stats.guest_list_tickets_claimed}
+              />
+              <StatCard
+                label="Guest-list capacity left"
+                value={stats.guest_list_remaining_capacity}
+              />
+
+              {showEntrances ? (
+                <>
+                  <StatCard
+                    label="Guest-list entrances"
+                    value={stats.guest_list_successful_entrances}
+                  />
+                  <StatCard
+                    label={
+                      category === "past"
+                        ? "Guest-list no-shows"
+                        : "Guest-list still expected"
+                    }
+                    value={guestListNoShows}
+                  />
+                </>
+              ) : null}
+            </div>
           </div>
-        </>
-      ) : null}
+        </div>
+      </section>
 
       {category === "ongoing" ? (
-        <>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard label="Tickets sold" value={stats.tickets_sold} />
-            <StatCard
-              label="Gross revenue"
-              value={formatPrice(stats.gross_revenue_cents)}
-            />
-            <StatCard label="Entrances" value={stats.successful_entrances} />
+        <section className="mt-8">
+          <SectionTitle eyebrow="Live entrance control" title="Ongoing stats" />
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <StatCard label="Total issued" value={stats.tickets_sold} />
+            <StatCard label="Total entrances" value={stats.successful_entrances} />
             <StatCard label="Still expected" value={stillExpected} />
             <StatCard
               label="Duplicate scans"
               value={stats.duplicate_scan_attempts}
             />
-          </div>
-
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <HorizontalBarChart title="Tickets sold by type" rows={soldRows} />
-            <HorizontalBarChart title="Entrances by type" rows={entranceRows} />
-          </div>
-
-          <div className="mt-6">
-            <TicketTypeTable
-              ticketTypeStats={ticketTypeStats}
-              showEntrances={showEntrances}
+            <StatCard
+              label="Invalid scans"
+              value={stats.invalid_scan_attempts}
             />
           </div>
-        </>
+        </section>
       ) : null}
 
       {category === "past" ? (
-        <>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="mt-8">
+          <SectionTitle eyebrow="Final result" title="Past event stats" />
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <StatCard label="Total issued" value={stats.tickets_sold} />
+            <StatCard label="Total entrances" value={stats.successful_entrances} />
             <StatCard
-              label="Gross revenue"
-              value={formatPrice(stats.gross_revenue_cents)}
-            />
-            <StatCard label="Tickets sold" value={stats.tickets_sold} />
-            <StatCard label="Entrances" value={stats.successful_entrances} />
-            <StatCard
-              label="No-shows"
+              label="Total no-shows"
               value={noShows}
               helper={formatPercentage(noShows, stats.tickets_sold)}
             />
@@ -414,23 +540,63 @@ export function EventStatisticsView({
                 stats.tickets_sold
               )}
             />
-          </div>
-
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <HorizontalBarChart title="Tickets sold by type" rows={soldRows} />
-            <HorizontalBarChart title="Entrances by type" rows={entranceRows} />
-          </div>
-
-          <div className="mt-6 grid gap-6">
-            <EntranceTimelineChart rows={entranceTimeStats} />
-
-            <TicketTypeTable
-              ticketTypeStats={ticketTypeStats}
-              showEntrances={showEntrances}
+            <StatCard
+              label="Duplicate scans"
+              value={stats.duplicate_scan_attempts}
             />
           </div>
-        </>
+        </section>
       ) : null}
+
+      <section className="mt-8">
+        <SectionTitle eyebrow="Ticket types" title="Breakdown by type" />
+
+        <div className="mt-4 grid gap-6 lg:grid-cols-2">
+          <HorizontalBarChart
+            title="Paid tickets issued by type"
+            rows={paidSoldRows}
+          />
+
+          <HorizontalBarChart
+            title="Guest-list tickets issued by type"
+            rows={guestListRows}
+          />
+        </div>
+
+        {showEntrances ? (
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <HorizontalBarChart
+              title="Paid entrances by type"
+              rows={paidEntranceRows}
+            />
+
+            <HorizontalBarChart
+              title="Guest-list entrances by type"
+              rows={guestListEntranceRows}
+            />
+          </div>
+        ) : null}
+      </section>
+
+      {category === "past" ? (
+        <div className="mt-8">
+          <EntranceTimelineChart rows={entranceTimeStats} />
+        </div>
+      ) : null}
+
+      <section className="mt-8 grid gap-6">
+        <TicketTypeTable
+          title="Paid ticket type details"
+          ticketTypeStats={paidTicketTypes}
+          showEntrances={showEntrances}
+        />
+
+        <TicketTypeTable
+          title="Guest-list ticket type details"
+          ticketTypeStats={guestListTicketTypes}
+          showEntrances={showEntrances}
+        />
+      </section>
     </div>
   );
 }
