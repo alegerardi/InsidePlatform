@@ -1,17 +1,13 @@
 import { createClient } from "../supabase/server";
 
-export type TicketStatus =
-  | "active"
-  | "used"
-  | "cancelled"
-  | "expired"
-  | "invalid";
+export type TicketStatus = "active" | "used" | "cancelled";
+
+export type TicketCapacityPool = "paid" | "guest_list";
 
 export type TicketEvent = {
   id: string;
   title: string;
   slug: string | null;
-  description: string | null;
   location: string | null;
   starts_at: string;
   ends_at: string | null;
@@ -26,6 +22,7 @@ export type TicketWithEvent = {
   ticket_type_title_snapshot: string | null;
   ticket_price_cents_snapshot: number;
   ticket_currency_snapshot: string;
+  ticket_capacity_pool_snapshot: TicketCapacityPool;
   ticket_code: string;
   qr_token: string;
   status: TicketStatus;
@@ -35,22 +32,15 @@ export type TicketWithEvent = {
   events: TicketEvent | null;
 };
 
-type RawTicketWithEvent = Omit<TicketWithEvent, "events"> & {
-  events: TicketEvent | TicketEvent[] | null;
-};
+function normalizeEvent(event: TicketEvent | TicketEvent[] | null): TicketEvent | null {
+  if (Array.isArray(event)) {
+    return event[0] ?? null;
+  }
 
-function normalizeTicketEvents(ticket: RawTicketWithEvent): TicketWithEvent {
-  const event = Array.isArray(ticket.events)
-    ? ticket.events[0] ?? null
-    : ticket.events;
-
-  return {
-    ...ticket,
-    events: event,
-  };
+  return event;
 }
 
-export async function getTicketById(ticketId: string) {
+export async function getTicket(ticketId: string, userId: string) {
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -64,6 +54,7 @@ export async function getTicketById(ticketId: string) {
       ticket_type_title_snapshot,
       ticket_price_cents_snapshot,
       ticket_currency_snapshot,
+      ticket_capacity_pool_snapshot,
       ticket_code,
       qr_token,
       status,
@@ -74,7 +65,6 @@ export async function getTicketById(ticketId: string) {
         id,
         title,
         slug,
-        description,
         location,
         starts_at,
         ends_at,
@@ -83,11 +73,19 @@ export async function getTicketById(ticketId: string) {
     `
     )
     .eq("id", ticketId)
-    .single();
+    .eq("user_id", userId)
+    .maybeSingle();
 
   if (error || !data) {
     return null;
   }
 
-  return normalizeTicketEvents(data as unknown as RawTicketWithEvent);
+  const ticket = data as Omit<TicketWithEvent, "events"> & {
+    events: TicketEvent | TicketEvent[] | null;
+  };
+
+  return {
+    ...ticket,
+    events: normalizeEvent(ticket.events),
+  } as TicketWithEvent;
 }

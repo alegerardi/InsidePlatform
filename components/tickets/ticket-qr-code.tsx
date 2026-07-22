@@ -9,18 +9,18 @@ export async function TicketQrCode({ validationUrl }: TicketQrCodeProps) {
   const qrDataUrl = await QRCode.toDataURL(validationUrl, {
     errorCorrectionLevel: "M",
     margin: 2,
-    width: 260,
+    width: 280,
   });
 
   return (
-    <div className="rounded-lg border bg-white p-4">
+    <div className="rounded-[2rem] border border-white/10 bg-white p-5 shadow-2xl shadow-black/30">
       <Image
         src={qrDataUrl}
         alt="Ticket QR code"
-        width={260}
-        height={260}
+        width={280}
+        height={280}
         unoptimized
-        className="mx-auto h-64 w-64"
+        className="mx-auto h-[280px] w-[280px]"
       />
     </div>
   );

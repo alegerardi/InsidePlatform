@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import type { Html5Qrcode } from "html5-qrcode";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 type QrCodeScannerProps = {
   eventId: string;
@@ -12,62 +12,48 @@ type ScanResult = {
   result:
     | "success"
     | "already_used"
-    | "invalid"
     | "wrong_event"
     | "unauthorized"
-    | "event_not_found"
-    | "error"
-    | "invalid_request";
+    | "invalid"
+    | "error";
   message: string;
-  ticket_id?: string;
   ticket_code?: string;
-  client_name?: string;
-  ticket_type_title?: string;
-  ticket_price_cents?: number;
-  ticket_currency?: string;
-  debug_id?: string;
+  event_title?: string;
+  client_name?: string | null;
+  client_email?: string | null;
+  ticket_type_title?: string | null;
+  ticket_price_cents?: number | null;
+  ticket_currency?: string | null;
+  price_cents?: number | null;
+  currency?: string | null;
 };
 
-function extractQrToken(scannedValue: string) {
-  const value = scannedValue.trim();
-
-  if (!value) {
-    return null;
-  }
+function extractQrToken(value: string) {
+  const trimmedValue = value.trim();
 
   try {
-    const url = new URL(value);
-    const pathParts = url.pathname.split("/").filter(Boolean);
-    const validateIndex = pathParts.indexOf("validate");
-    const token = pathParts[validateIndex + 1];
+    const url = new URL(trimmedValue);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const validateIndex = parts.indexOf("validate");
 
-    if (validateIndex >= 0 && token) {
-      return decodeURIComponent(token);
+    if (validateIndex >= 0 && parts[validateIndex + 1]) {
+      return parts[validateIndex + 1];
     }
   } catch {
-    // The scanned value is not a full URL. Continue with fallback parsing.
+    // The scanned value may already be a raw token or a path.
   }
 
-  const validatePathMatch = value.match(/\/validate\/([^/?#]+)/);
+  const parts = trimmedValue.split("/").filter(Boolean);
+  const validateIndex = parts.indexOf("validate");
 
-  if (validatePathMatch?.[1]) {
-    return decodeURIComponent(validatePathMatch[1]);
+  if (validateIndex >= 0 && parts[validateIndex + 1]) {
+    return parts[validateIndex + 1];
   }
 
-  const looksLikeRawToken = /^[A-Za-z0-9_-]{16,200}$/.test(value);
-
-  if (looksLikeRawToken) {
-    return value;
-  }
-
-  return null;
+  return trimmedValue;
 }
 
-function formatPrice(priceCents?: number, currency?: string) {
-  if (typeof priceCents !== "number" || !currency) {
-    return null;
-  }
-
+function formatPrice(priceCents: number, currency = "EUR") {
   return new Intl.NumberFormat("en", {
     style: "currency",
     currency,
@@ -75,12 +61,12 @@ function formatPrice(priceCents?: number, currency?: string) {
 }
 
 function getResultTitle(result: ScanResult) {
-  if (result.result === "success") {
-    return "Successful ticket";
+  if (result.success || result.result === "success") {
+    return "Access approved";
   }
 
   if (result.result === "already_used") {
-    return "Ticket already used";
+    return "Already checked in";
   }
 
   if (result.result === "wrong_event") {
@@ -91,30 +77,26 @@ function getResultTitle(result: ScanResult) {
     return "Unauthorized";
   }
 
-  return "Ticket not valid";
+  return "Access not approved";
 }
 
-function getResultBoxClass(result: ScanResult) {
-  if (result.result === "success") {
-    return "border-green-300 bg-green-50 text-green-800";
-  }
+function getTicketPrice(result: ScanResult) {
+  return result.ticket_price_cents ?? result.price_cents ?? 0;
+}
 
-  if (result.result === "already_used" || result.result === "wrong_event") {
-    return "border-yellow-300 bg-yellow-50 text-yellow-800";
-  }
-
-  return "border-red-300 bg-red-50 text-red-800";
+function getTicketCurrency(result: ScanResult) {
+  return result.ticket_currency ?? result.currency ?? "EUR";
 }
 
 export function QrCodeScanner({ eventId }: QrCodeScannerProps) {
-  const readerId = `qr-scanner-reader-${eventId}`;
+  const readerId = useMemo(() => `qr-reader-${eventId}`, [eventId]);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const isRunningRef = useRef(false);
-  const hasScannedRef = useRef(false);
+  const isProcessingRef = useRef(false);
 
-  const [isRunning, setIsRunning] = useState(false);
-  const [status, setStatus] = useState("Scanner is off.");
+  const [cameraState, setCameraState] = useState<
+    "idle" | "starting" | "active" | "error"
+  >("idle");
   const [error, setError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
 
@@ -122,99 +104,82 @@ export function QrCodeScanner({ eventId }: QrCodeScannerProps) {
     const scanner = scannerRef.current;
 
     if (!scanner) {
+      setCameraState("idle");
       return;
     }
 
     try {
-      if (isRunningRef.current) {
-        await scanner.stop();
-      }
-
+      await scanner.stop();
       scanner.clear();
-    } catch (stopError) {
-      console.warn("QR scanner stop error", stopError);
+    } catch {
+      // The scanner may already be stopped.
     } finally {
       scannerRef.current = null;
-      isRunningRef.current = false;
-      hasScannedRef.current = false;
-      setIsRunning(false);
-      setStatus("Scanner is off.");
+      setCameraState("idle");
     }
   }, []);
 
-  useEffect(() => {
-    return () => {
-      const scanner = scannerRef.current;
-
-      if (!scanner) {
+  const validateScannedValue = useCallback(
+    async (decodedText: string) => {
+      if (isProcessingRef.current) {
         return;
       }
 
-      scanner
-        .stop()
-        .catch(() => {
-          // Ignore cleanup errors.
-        })
-        .finally(() => {
-          try {
-            scanner.clear();
-          } catch {
-            // Ignore cleanup errors.
-          }
-        });
-    };
-  }, []);
-
-  const validateScannedToken = useCallback(
-    async (qrToken: string) => {
-      setError(null);
-      setStatus("Ticket detected. Validating...");
-
-      await stopScanner();
+      isProcessingRef.current = true;
 
       try {
-        const response = await fetch(
-          `/staff/events/${encodeURIComponent(eventId)}/scan`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ qrToken }),
-          }
-        );
+        const qrToken = extractQrToken(decodedText);
 
-        const result = (await response.json()) as ScanResult;
+        if (!qrToken) {
+          throw new Error("Invalid QR code.");
+        }
 
-        setScanResult(result);
-        setStatus("Scan complete.");
-      } catch (requestError) {
-        console.error("QR scan request error", requestError);
+        await stopScanner();
 
-        setScanResult({
-          success: false,
-          result: "error",
-          message: "Could not contact the validation server. Please try again.",
+        const response = await fetch(`/staff/events/${eventId}/scan`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            qrToken,
+          }),
         });
-        setStatus("Scan failed.");
+
+        const payload = (await response.json()) as ScanResult;
+
+        if (!response.ok) {
+          throw new Error(payload.message || "Could not validate ticket.");
+        }
+
+        setScanResult(payload);
+      } catch (scanError) {
+        setError(
+          scanError instanceof Error
+            ? scanError.message
+            : "Could not validate ticket."
+        );
+        setCameraState("error");
+      } finally {
+        isProcessingRef.current = false;
       }
     },
     [eventId, stopScanner]
   );
 
   const startScanner = useCallback(async () => {
-    setError(null);
-    setScanResult(null);
-    setStatus("Starting camera...");
-
-    if (scannerRef.current || isRunningRef.current) {
+    if (scannerRef.current || cameraState === "starting") {
       return;
     }
 
+    setError(null);
+    setScanResult(null);
+    setCameraState("starting");
+
     try {
       const { Html5Qrcode } = await import("html5-qrcode");
-
       const scanner = new Html5Qrcode(readerId);
+
       scannerRef.current = scanner;
 
       await scanner.start(
@@ -222,175 +187,189 @@ export function QrCodeScanner({ eventId }: QrCodeScannerProps) {
         {
           fps: 10,
           qrbox: {
-            width: 260,
-            height: 260,
+            width: 280,
+            height: 280,
           },
         },
-        async (decodedText) => {
-          if (hasScannedRef.current) {
-            return;
-          }
-
-          const qrToken = extractQrToken(decodedText);
-
-          if (!qrToken) {
-            setError("This QR code is not a valid Inside ticket QR.");
-            return;
-          }
-
-          hasScannedRef.current = true;
-
-          await validateScannedToken(qrToken);
+        (decodedText) => {
+          void validateScannedValue(decodedText);
         },
-        () => {
-          // This callback fires constantly while searching for a QR.
-        }
+        undefined
       );
 
-      isRunningRef.current = true;
-      setIsRunning(true);
-      setStatus("Scanner is active. Point the camera at the ticket QR code.");
-    } catch (startError) {
-      console.error("QR scanner start error", startError);
-
+      setCameraState("active");
+    } catch (cameraError) {
       scannerRef.current = null;
-      isRunningRef.current = false;
-      hasScannedRef.current = false;
-      setIsRunning(false);
-      setStatus("Scanner is off.");
+      setCameraState("error");
       setError(
-        "Could not start the camera. Check camera permission, HTTPS, and browser compatibility."
+        cameraError instanceof Error
+          ? cameraError.message
+          : "Could not start the camera."
       );
     }
-  }, [readerId, validateScannedToken]);
+  }, [cameraState, readerId, validateScannedValue]);
 
-  const closeResult = useCallback(() => {
-    setScanResult(null);
-    setError(null);
-    setStatus("Scanner is off.");
-  }, []);
-
-  const scanAnother = useCallback(async () => {
+  async function handleScanNext() {
     setScanResult(null);
     setError(null);
     await startScanner();
-  }, [startScanner]);
+  }
 
-  const formattedPrice = scanResult
-    ? formatPrice(scanResult.ticket_price_cents, scanResult.ticket_currency)
-    : null;
+  const isStarting = cameraState === "starting";
+  const isActive = cameraState === "active";
 
   return (
-    <section className="rounded-lg border p-5">
-      <div>
-        <h2 className="text-lg font-semibold">QR camera scanner</h2>
+    <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.22em] text-white/35">
+            QR scanner
+          </p>
 
-        <p className="mt-1 text-sm text-gray-600">
-          Use this to scan a client ticket QR code at the entrance.
-        </p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">
+            Scan ticket
+          </h2>
+        </div>
+
+        <div className="flex gap-2">
+          {!isActive ? (
+            <button
+              type="button"
+              onClick={() => {
+                void startScanner();
+              }}
+              disabled={isStarting}
+              className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isStarting ? "Starting..." : "Start camera"}
+            </button>
+          ) : null}
+
+          {isActive ? (
+            <button
+              type="button"
+              onClick={() => {
+                void stopScanner();
+              }}
+              className="rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+            >
+              Stop
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-md border bg-black p-2">
-        <div id={readerId} className="min-h-[280px] bg-black" />
-      </div>
+      <div className="relative mt-6 overflow-hidden rounded-[1.5rem] border border-white/10 bg-black/40">
+        <div
+          id={readerId}
+          className="min-h-[360px] overflow-hidden rounded-[1.5rem]"
+        />
 
-      <p className="mt-3 text-sm text-gray-600">{status}</p>
+        {!isActive && !isStarting ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 p-6 text-center">
+            <div>
+              <p className="text-sm font-medium text-white">
+                Camera scanner ready
+              </p>
+              <p className="mt-2 max-w-sm text-sm text-white/45">
+                Start the camera and point it at the ticket QR code.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {isStarting ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 p-6 text-center">
+            <p className="text-sm font-medium text-white">Starting camera...</p>
+          </div>
+        ) : null}
+      </div>
 
       {error ? (
-        <p className="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
           {error}
         </p>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={startScanner}
-          disabled={isRunning}
-          className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Start scanner
-        </button>
-
-        <button
-          type="button"
-          onClick={stopScanner}
-          disabled={!isRunning}
-          className="rounded-md border px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Stop scanner
-        </button>
-      </div>
-
-      <p className="mt-4 text-xs text-gray-500">
-        The camera only reads the QR code. Final validation still happens securely
-        on the server.
-      </p>
-
       {scanResult ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <div className={`rounded-md border p-4 ${getResultBoxClass(scanResult)}`}>
-              <p className="text-sm font-medium uppercase tracking-wide">
-                {getResultTitle(scanResult)}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-6 py-10">
+          <div className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-white/10 bg-neutral-950 shadow-2xl shadow-black/50">
+            <div className="border-b border-white/10 p-6">
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-white/35">
+                Scan result
               </p>
 
-              <h3 className="mt-2 text-2xl font-bold">
-                {scanResult.result === "success"
-                  ? `Successful ticket for ${scanResult.client_name ?? "Client"}`
-                  : scanResult.message}
+              <h3 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+                {getResultTitle(scanResult)}
               </h3>
 
-              {scanResult.result !== "success" && scanResult.client_name ? (
-                <p className="mt-3">
-                  Client: <span className="font-semibold">{scanResult.client_name}</span>
-                </p>
-              ) : null}
+              <p className="mt-3 text-sm leading-6 text-white/55">
+                {scanResult.message}
+              </p>
+            </div>
 
-              {scanResult.ticket_type_title ? (
-                <p className="mt-3">
-                  Ticket type:{" "}
-                  <span className="font-semibold">
-                    {scanResult.ticket_type_title}
-                  </span>
+            <div className="grid gap-3 p-6">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-xs text-white/35">Client</p>
+                <p className="mt-1 font-semibold text-white">
+                  {scanResult.client_name ||
+                    scanResult.client_email ||
+                    "Not available"}
                 </p>
-              ) : null}
 
-              {formattedPrice ? (
-                <p className="mt-1">
-                  Price: <span className="font-semibold">{formattedPrice}</span>
-                </p>
-              ) : null}
+                {scanResult.client_name && scanResult.client_email ? (
+                  <p className="mt-1 text-sm text-white/45">
+                    {scanResult.client_email}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-xs text-white/35">Ticket</p>
+                  <p className="mt-1 font-semibold text-white">
+                    {scanResult.ticket_type_title ?? "Ticket"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-xs text-white/35">Price</p>
+                  <p className="mt-1 font-semibold text-white">
+                    {formatPrice(
+                      getTicketPrice(scanResult),
+                      getTicketCurrency(scanResult)
+                    )}
+                  </p>
+                </div>
+              </div>
 
               {scanResult.ticket_code ? (
-                <p className="mt-1">
-                  Code:{" "}
-                  <span className="font-mono font-semibold">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="text-xs text-white/35">Code</p>
+                  <p className="mt-1 font-mono font-semibold text-white">
                     {scanResult.ticket_code}
-                  </span>
-                </p>
-              ) : null}
-
-              {scanResult.debug_id ? (
-                <p className="mt-3 text-sm">
-                  Reference: <span className="font-mono">{scanResult.debug_id}</span>
-                </p>
+                  </p>
+                </div>
               ) : null}
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-3">
+            <div className="grid gap-3 border-t border-white/10 p-6 sm:grid-cols-2">
               <button
                 type="button"
-                onClick={scanAnother}
-                className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white"
+                onClick={() => {
+                  void handleScanNext();
+                }}
+                className="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-85"
               >
-                Scan another ticket
+                Scan next
               </button>
 
               <button
                 type="button"
-                onClick={closeResult}
-                className="rounded-md border px-4 py-2 text-sm font-medium"
+                onClick={() => {
+                  setScanResult(null);
+                }}
+                className="rounded-xl border border-white/15 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/10"
               >
                 Close
               </button>
