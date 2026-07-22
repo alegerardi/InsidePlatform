@@ -8,7 +8,7 @@ import type {
 } from "../../lib/events/get-organizer-events";
 import { CopyEventLinkButton } from "../events/copy-event-link-button";
 import { CancelEventCard } from "../events/cancel-event-card";
-
+import { RemoveStaffButton } from "../events/remove-staff-button";
 
 type EventCategory = "upcoming" | "ongoing" | "past";
 type OrganizerTab = "overview" | "staff" | "links" | "actions";
@@ -286,9 +286,19 @@ function StaffTab({
             {eventStaff.map((assignment) => (
               <div
                 key={`${assignment.event_id}-${assignment.staff_user_id}`}
-                className="rounded-xl border border-white/10 bg-black/20 px-4 py-3"
+                className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
-                <p className="font-medium text-white">{assignment.staff_email}</p>
+                <div>
+                  <p className="font-medium text-white">{assignment.staff_email}</p>
+                  <p className="mt-1 text-xs text-white/35">Can validate this event</p>
+                </div>
+
+                <RemoveStaffButton
+                  eventId={event.id}
+                  staffUserId={assignment.staff_user_id}
+                  staffEmail={assignment.staff_email}
+                  redirectPath={redirectPath}
+                />
               </div>
             ))}
           </div>

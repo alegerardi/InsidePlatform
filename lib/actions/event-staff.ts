@@ -19,6 +19,18 @@ type AssignStaffResponse = {
   debug_id?: string;
 };
 
+type RemoveStaffResponse = {
+  success: boolean;
+  result:
+    | "removed"
+    | "already_removed"
+    | "unauthorized"
+    | "event_not_found"
+    | "error";
+  message: string;
+  debug_id?: string;
+};
+
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
 
@@ -126,6 +138,83 @@ export async function addEventStaffAction(formData: FormData) {
         : result.staff_email
           ? `Staff added: ${result.staff_email}`
           : result.message;
+
+  redirectWithFeedback(
+    redirectPath,
+    result.success ? "message" : "error",
+    safeMessage
+  );
+}
+
+export async function removeEventStaffAction(formData: FormData) {
+  await requireUser("/dashboard");
+
+  const eventId = getString(formData, "event_id");
+  const staffUserId = getString(formData, "staff_user_id");
+  const redirectPath = getSafeRedirectPath(formData);
+
+  if (!eventId || !staffUserId) {
+    redirectWithFeedback(
+      redirectPath,
+      "error",
+      "Missing staff assignment information."
+    );
+  }
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("remove_event_staff_assignment", {
+    target_event_id: eventId,
+    target_staff_user_id: staffUserId,
+  });
+
+  if (error) {
+    const debugId = crypto.randomUUID();
+
+    console.error("removeEventStaffAction RPC error", {
+      debugId,
+      eventId,
+      staffUserId,
+      errorCode: error.code,
+      errorMessage: error.message,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      timestamp: new Date().toISOString(),
+    });
+
+    redirectWithFeedback(
+      redirectPath,
+      "error",
+      `Could not remove staff. Reference: ${debugId}`
+    );
+  }
+
+  if (!data) {
+    const debugId = crypto.randomUUID();
+
+    console.error("removeEventStaffAction empty response", {
+      debugId,
+      eventId,
+      staffUserId,
+      timestamp: new Date().toISOString(),
+    });
+
+    redirectWithFeedback(
+      redirectPath,
+      "error",
+      `Could not remove staff. Reference: ${debugId}`
+    );
+  }
+
+  const result = data as RemoveStaffResponse;
+
+  revalidatePath("/dashboard");
+  revalidatePath(redirectPath);
+
+  const safeMessage =
+    result.result === "error" && result.debug_id
+      ? `${result.message} Reference: ${result.debug_id}`
+      : result.message;
 
   redirectWithFeedback(
     redirectPath,
