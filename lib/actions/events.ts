@@ -1,9 +1,9 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getProfile } from "../auth/get-profile";
 import { requireUser } from "../auth/require-user";
-import { randomSlugSuffix, slugify } from "../events/slugify";
+import { slugify } from "../events/slugify";
 import { createClient } from "../supabase/server";
 
 type TicketCapacityPool = "paid" | "guest_list";
@@ -12,20 +12,31 @@ type ParsedTicketType = {
   title: string;
   description: string | null;
   price_cents: number;
-  currency: "EUR";
+  currency: string;
   max_quantity: number | null;
   capacity_pool: TicketCapacityPool;
   sort_order: number;
 };
 
+type CreateEventResponse = {
+  success: boolean;
+  result: string;
+  message: string;
+  event_id?: string;
+  slug?: string;
+  debug_id?: string;
+};
+
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
 
-  if (typeof value !== "string") {
-    return "";
-  }
+  return typeof value === "string" ? value.trim() : "";
+}
 
-  return value.trim();
+function getOptionalString(formData: FormData, key: string) {
+  const value = getString(formData, key);
+
+  return value.length > 0 ? value : null;
 }
 
 function getInteger(formData: FormData, key: string) {
@@ -35,20 +46,46 @@ function getInteger(formData: FormData, key: string) {
     return 0;
   }
 
-  const parsed = Number(value);
+  const parsedValue = Number.parseInt(value, 10);
 
-  if (!Number.isInteger(parsed)) {
-    return Number.NaN;
+  return Number.isFinite(parsedValue) ? parsedValue : 0;
+}
+
+function getOptionalInteger(formData: FormData, key: string) {
+  const value = getString(formData, key);
+
+  if (!value) {
+    return null;
   }
 
-  return parsed;
+  const parsedValue = Number.parseInt(value, 10);
+
+  return Number.isFinite(parsedValue) ? parsedValue : null;
 }
 
-function redirectWithError(message: string): never {
-  redirect(`/events/new?error=${encodeURIComponent(message)}`);
+function getPriceCents(formData: FormData, key: string) {
+  const value = getString(formData, key).replace(",", ".");
+
+  if (!value) {
+    return 0;
+  }
+
+  const parsedValue = Number.parseFloat(value);
+
+  if (!Number.isFinite(parsedValue)) {
+    return 0;
+  }
+
+  return Math.round(parsedValue * 100);
 }
 
-function parseDateTimeLocal(value: string) {
+function getCapacityPool(formData: FormData, key: string): TicketCapacityPool {
+  const value = getString(formData, key);
+
+  return value === "guest_list" ? "guest_list" : "paid";
+}
+
+function parseLocalDateTime(value: string) {
   if (!value) {
     return null;
   }
@@ -59,308 +96,187 @@ function parseDateTimeLocal(value: string) {
     return null;
   }
 
-  return date;
+  return date.toISOString();
 }
 
-function parsePriceToCents(value: string) {
-  const normalized = value.replace(",", ".").trim();
-
-  if (!normalized) {
-    return null;
-  }
-
-  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) {
-    return null;
-  }
-
-  const [eurosPart, centsPart = ""] = normalized.split(".");
-  const euros = Number(eurosPart);
-  const cents = Number(centsPart.padEnd(2, "0"));
-
-  if (!Number.isInteger(euros) || !Number.isInteger(cents)) {
-    return null;
-  }
-
-  return euros * 100 + cents;
-}
-
-function parseOptionalPositiveInteger(value: string) {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = Number(value);
-
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    return Number.NaN;
-  }
-
-  return parsed;
-}
-
-function parseCapacityPool(value: string): TicketCapacityPool {
-  return value === "guest_list" ? "guest_list" : "paid";
-}
-
-function parseTicketTypes(formData: FormData): ParsedTicketType[] {
+function parseTicketTypes(formData: FormData) {
   const ticketTypes: ParsedTicketType[] = [];
 
   for (let index = 1; index <= 3; index += 1) {
     const title = getString(formData, `ticket_type_${index}_title`);
-    const description = getString(formData, `ticket_type_${index}_description`);
-    const priceValue = getString(formData, `ticket_type_${index}_price`);
-    const maxQuantityValue = getString(formData, `ticket_type_${index}_max_quantity`);
-    const capacityPool = parseCapacityPool(
-      getString(formData, `ticket_type_${index}_capacity_pool`)
-    );
-
-    const hasAnyValue = Boolean(title || description || priceValue || maxQuantityValue);
-
-    if (!hasAnyValue) {
-      continue;
-    }
 
     if (!title) {
-      redirectWithError(`Ticket type ${index}: title is required.`);
-    }
-
-    if (!priceValue) {
-      redirectWithError(`Ticket type ${index}: price is required.`);
-    }
-
-    const priceCents = parsePriceToCents(priceValue);
-
-    if (priceCents === null || priceCents < 0) {
-      redirectWithError(`Ticket type ${index}: insert a valid price.`);
-    }
-
-    const maxQuantity = parseOptionalPositiveInteger(maxQuantityValue);
-
-    if (Number.isNaN(maxQuantity)) {
-      redirectWithError(`Ticket type ${index}: max quantity must be at least 1.`);
+      continue;
     }
 
     ticketTypes.push({
       title,
-      description: description || null,
-      price_cents: priceCents,
-      currency: "EUR",
-      max_quantity: maxQuantity,
-      capacity_pool: capacityPool,
-      sort_order: index - 1,
+      description: getOptionalString(
+        formData,
+        `ticket_type_${index}_description`
+      ),
+      price_cents: getPriceCents(formData, `ticket_type_${index}_price`),
+      currency: getString(formData, `ticket_type_${index}_currency`) || "EUR",
+      max_quantity: getOptionalInteger(
+        formData,
+        `ticket_type_${index}_max_quantity`
+      ),
+      capacity_pool: getCapacityPool(
+        formData,
+        `ticket_type_${index}_capacity_pool`
+      ),
+      sort_order: ticketTypes.length + 1,
     });
-  }
-
-  if (ticketTypes.length === 0) {
-    redirectWithError("At least one ticket type is required.");
   }
 
   return ticketTypes;
 }
 
-async function insertEventWithSlug(params: {
-  title: string;
-  description: string | null;
-  location: string | null;
-  startsAtIso: string;
-  endsAtIso: string | null;
-  maxTickets: number;
-  maxGuestList: number;
-  organizerId: string;
-}) {
-  const supabase = await createClient();
-  const baseSlug = slugify(params.title);
+function redirectToNewEventWithError(message: string): never {
+  const params = new URLSearchParams();
+  params.set("error", message);
 
-  const candidateSlugs = [
-    baseSlug,
-    `${baseSlug}-${randomSlugSuffix()}`,
-    `${baseSlug}-${randomSlugSuffix()}`,
-  ];
-
-  for (const slug of candidateSlugs) {
-    const { data, error } = await supabase
-      .from("events")
-      .insert({
-        title: params.title,
-        slug,
-        description: params.description,
-        location: params.location,
-        starts_at: params.startsAtIso,
-        ends_at: params.endsAtIso,
-        status: "published",
-        max_tickets: params.maxTickets,
-        max_guest_list: params.maxGuestList,
-        organizer_id: params.organizerId,
-      })
-      .select("id, slug")
-      .single();
-
-    if (!error && data?.id && data?.slug) {
-      return {
-        eventId: data.id as string,
-        slug: data.slug as string,
-      };
-    }
-
-    const isUniqueSlugError =
-      error?.code === "23505" || error?.message?.toLowerCase().includes("duplicate");
-
-    if (!isUniqueSlugError) {
-      throw new Error(error?.message ?? "Failed to create event.");
-    }
-  }
-
-  throw new Error("Could not generate a unique event link.");
+  redirect(`/events/new?${params.toString()}`);
 }
 
-async function insertTicketTypes(params: {
-  eventId: string;
-  ticketTypes: ParsedTicketType[];
-}) {
-  const supabase = await createClient();
+function getCapacitySum(
+  ticketTypes: ParsedTicketType[],
+  capacityPool: TicketCapacityPool
+) {
+  return ticketTypes.reduce((total, ticketType) => {
+    if (ticketType.capacity_pool !== capacityPool) {
+      return total;
+    }
 
-  const rows = params.ticketTypes.map((ticketType) => ({
-    event_id: params.eventId,
-    title: ticketType.title,
-    description: ticketType.description,
-    price_cents: ticketType.price_cents,
-    currency: ticketType.currency,
-    max_quantity: ticketType.max_quantity,
-    capacity_pool: ticketType.capacity_pool,
-    is_active: true,
-    sort_order: ticketType.sort_order,
-  }));
-
-  const { error } = await supabase.from("ticket_types").insert(rows);
-
-  if (error) {
-    throw new Error(error.message);
-  }
+    return total + (ticketType.max_quantity ?? 0);
+  }, 0);
 }
 
 export async function createEventAction(formData: FormData) {
-  const user = await requireUser("/events/new");
-  const profile = await getProfile(user.id);
-
-  if (!profile) {
-    redirectWithError("Profile not found. Try logging in again.");
-  }
-
-  if (profile.role !== "event_organizer" && profile.role !== "admin") {
-    redirect("/unauthorized");
-  }
+  await requireUser("/dashboard");
 
   const title = getString(formData, "title");
-  const description = getString(formData, "description");
-  const location = getString(formData, "location");
-  const startsAtValue = getString(formData, "starts_at");
-  const endsAtValue = getString(formData, "ends_at");
+  const description = getOptionalString(formData, "description");
+  const location = getOptionalString(formData, "location");
+  const startsAt = parseLocalDateTime(getString(formData, "starts_at"));
+  const endsAt = parseLocalDateTime(getString(formData, "ends_at"));
+
   const maxTickets = getInteger(formData, "max_tickets");
   const maxGuestList = getInteger(formData, "max_guest_list");
+
   const ticketTypes = parseTicketTypes(formData);
 
-
   if (!title) {
-    redirectWithError("Event title is required.");
+    redirectToNewEventWithError("Event title is required.");
   }
-
-  if (!location) {
-    redirectWithError("Event location is required.");
-  }
-
-  const startsAt = parseDateTimeLocal(startsAtValue);
 
   if (!startsAt) {
-    redirectWithError("Valid start date and time are required.");
+    redirectToNewEventWithError("Event start date is required.");
   }
 
-  if (startsAt <= new Date()) {
-    redirectWithError("Event start date must be in the future.");
+  if (endsAt && startsAt && new Date(endsAt) <= new Date(startsAt)) {
+    redirectToNewEventWithError("Event end date must be after the start date.");
   }
 
-  const endsAt = endsAtValue ? parseDateTimeLocal(endsAtValue) : null;
-
-  if (endsAtValue && !endsAt) {
-    redirectWithError("Valid end date and time are required.");
+  if (maxTickets < 1) {
+    redirectToNewEventWithError("Paid ticket capacity must be at least 1.");
   }
 
-  if (endsAt && endsAt <= startsAt) {
-    redirectWithError("End date must be after start date.");
+  if (maxGuestList < 0) {
+    redirectToNewEventWithError("Guest-list capacity cannot be negative.");
   }
 
-  if (!Number.isInteger(maxTickets) || maxTickets < 1) {
-    redirectWithError("Paid-ticket capacity must be at least 1.");
+  if (ticketTypes.length === 0) {
+    redirectToNewEventWithError("At least one ticket type is required.");
   }
 
-  if (!Number.isInteger(maxGuestList) || maxGuestList < 0) {
-    redirectWithError("Guest-list capacity cannot be negative.");
-  }
-
-  const hasGuestListType = ticketTypes.some(
+  const paidTicketTypeCapacity = getCapacitySum(ticketTypes, "paid");
+  const guestListTicketTypeCapacity = getCapacitySum(ticketTypes, "guest_list");
+  const hasGuestListTicketType = ticketTypes.some(
     (ticketType) => ticketType.capacity_pool === "guest_list"
   );
 
-  if (hasGuestListType && maxGuestList < 1) {
-    redirectWithError(
-      "Guest-list capacity must be at least 1 if you create a guest-list ticket type."
+  if (paidTicketTypeCapacity > maxTickets) {
+    redirectToNewEventWithError(
+      "The sum of paid ticket type quantities cannot exceed paid capacity."
     );
   }
 
-  const paidTicketTypeCapacity = ticketTypes.reduce((total, ticketType) => {
-    if (ticketType.capacity_pool !== "paid") {
-      return total;
-    }
-
-    return total + (ticketType.max_quantity ?? 0);
-  }, 0);
-
-  const guestListTicketTypeCapacity = ticketTypes.reduce((total, ticketType) => {
-    if (ticketType.capacity_pool !== "guest_list") {
-      return total;
-    }
-
-    return total + (ticketType.max_quantity ?? 0);
-  }, 0);
-
-  if (paidTicketTypeCapacity > maxTickets) {
-    redirectWithError(
-      "The sum of paid ticket type quantities cannot be greater than the paid-ticket capacity."
+  if (hasGuestListTicketType && maxGuestList < 1) {
+    redirectToNewEventWithError(
+      "Guest-list capacity must be at least 1 when guest-list tickets exist."
     );
   }
 
   if (guestListTicketTypeCapacity > maxGuestList) {
-    redirectWithError(
-      "The sum of guest-list ticket type quantities cannot be greater than the guest-list capacity."
+    redirectToNewEventWithError(
+      "The sum of guest-list ticket type quantities cannot exceed guest-list capacity."
     );
   }
 
-  let createdEvent: {
-    eventId: string;
-    slug: string;
-  };
+  const supabase = await createClient();
 
-  try {
-    createdEvent = await insertEventWithSlug({
-      title,
-      description: description || null,
-      location,
-      startsAtIso: startsAt.toISOString(),
-      endsAtIso: endsAt ? endsAt.toISOString() : null,
-      maxTickets,
-      maxGuestList,
-      organizerId: user.id,
+  const { data, error } = await supabase.rpc("create_event_with_ticket_types", {
+    new_title: title,
+    new_description: description,
+    new_location: location,
+    new_starts_at: startsAt,
+    new_ends_at: endsAt,
+    new_max_tickets: maxTickets,
+    new_max_guest_list: maxGuestList,
+    new_slug_base: slugify(title),
+    ticket_types_json: ticketTypes,
+  });
+
+  if (error) {
+    const debugId = crypto.randomUUID();
+
+    console.error("createEventAction RPC error", {
+      debugId,
+      errorCode: error.code,
+      errorMessage: error.message,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      timestamp: new Date().toISOString(),
     });
 
-    await insertTicketTypes({
-      eventId: createdEvent.eventId,
-      ticketTypes,
-    });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Something went wrong creating the event.";
-
-    redirectWithError(message);
+    redirectToNewEventWithError(`Could not create event. Reference: ${debugId}`);
   }
 
-  redirect(`/events/${createdEvent.slug}`);
+  if (!data) {
+    const debugId = crypto.randomUUID();
+
+    console.error("createEventAction empty response", {
+      debugId,
+      timestamp: new Date().toISOString(),
+    });
+
+    redirectToNewEventWithError(`Could not create event. Reference: ${debugId}`);
+  }
+
+  const result = data as CreateEventResponse;
+
+  if (!result.success) {
+    const safeMessage =
+      result.result === "error" && result.debug_id
+        ? `${result.message} Reference: ${result.debug_id}`
+        : result.message;
+
+    redirectToNewEventWithError(safeMessage);
+  }
+
+  revalidatePath("/dashboard");
+
+  if (result.slug) {
+    revalidatePath(`/events/${result.slug}`);
+
+    const params = new URLSearchParams();
+    params.set("event", result.slug);
+    params.set("tab", "overview");
+    params.set("message", "Event created.");
+
+    redirect(`/dashboard?${params.toString()}`);
+  }
+
+  redirect("/dashboard");
 }
