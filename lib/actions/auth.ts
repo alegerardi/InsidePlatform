@@ -1,70 +1,113 @@
 "use server";
 
-import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "../supabase/server";
 import { sanitizeNextPath } from "../auth/sanitize-next-path";
+import { createClient } from "../supabase/server";
+import { getSiteUrl } from "../url/get-site-url";
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
 
-  if (typeof value !== "string") {
-    return "";
-  }
-
-  return value.trim();
+  return typeof value === "string" ? value.trim() : "";
 }
 
-function redirectWithError(path: string, message: string) {
-  redirect(`${path}?error=${encodeURIComponent(message)}`);
+function buildRedirectPath(
+  pathname: string,
+  params: Record<string, string | undefined>
+) {
+  const searchParams = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      searchParams.set(key, value);
+    }
+  }
+
+  const queryString = searchParams.toString();
+
+  return queryString ? `${pathname}?${queryString}` : pathname;
+}
+
+function redirectToLoginWithError(message: string, nextPath: string): never {
+  redirect(
+    buildRedirectPath("/login", {
+      error: message,
+      next: nextPath,
+    })
+  );
+}
+
+function redirectToSignupWithError(message: string, nextPath: string): never {
+  redirect(
+    buildRedirectPath("/signup", {
+      error: message,
+      next: nextPath,
+    })
+  );
 }
 
 export async function signUpAction(formData: FormData) {
-  const fullName = getString(formData, "full_name");
   const email = getString(formData, "email").toLowerCase();
   const password = getString(formData, "password");
-  const next = sanitizeNextPath(formData.get("next"));
+  const fullName = getString(formData, "full_name");
+  const nextPath = sanitizeNextPath(getString(formData, "next") || "/dashboard");
 
-  if (!fullName || !email || !password) {
-    redirectWithError(`/signup?next=${encodeURIComponent(next)}`, "Fill all fields.");
+  if (!email) {
+    redirectToSignupWithError("Email is required.", nextPath);
   }
 
-  if (password.length < 6) {
-    redirectWithError(
-      `/signup?next=${encodeURIComponent(next)}`,
-      "Password must have at least 6 characters."
-    );
+  if (!password) {
+    redirectToSignupWithError("Password is required.", nextPath);
   }
+
+  const siteUrl = getSiteUrl();
+  const emailRedirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent(
+    nextPath
+  )}`;
 
   const supabase = await createClient();
-  const headerStore = await headers();
-  const origin = headerStore.get("origin") ?? "http://localhost:3000";
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: {
-        full_name: fullName,
+        full_name: fullName || null,
       },
-      emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      emailRedirectTo,
     },
   });
 
   if (error) {
-    redirectWithError(`/signup?next=${encodeURIComponent(next)}`, error.message);
+    redirectToSignupWithError(error.message, nextPath);
   }
 
-  redirect(next);
+  revalidatePath("/", "layout");
+
+  if (data.session) {
+    redirect(nextPath);
+  }
+
+  redirect(
+    buildRedirectPath("/login", {
+      message: "Account created. Check your email to confirm your account.",
+      next: nextPath,
+    })
+  );
 }
 
 export async function signInAction(formData: FormData) {
   const email = getString(formData, "email").toLowerCase();
   const password = getString(formData, "password");
-  const next = sanitizeNextPath(formData.get("next"));
+  const nextPath = sanitizeNextPath(getString(formData, "next") || "/dashboard");
 
-  if (!email || !password) {
-    redirectWithError(`/login?next=${encodeURIComponent(next)}`, "Fill all fields.");
+  if (!email) {
+    redirectToLoginWithError("Email is required.", nextPath);
+  }
+
+  if (!password) {
+    redirectToLoginWithError("Password is required.", nextPath);
   }
 
   const supabase = await createClient();
@@ -75,13 +118,11 @@ export async function signInAction(formData: FormData) {
   });
 
   if (error) {
-    redirectWithError(
-      `/login?next=${encodeURIComponent(next)}`,
-      "Invalid email or password."
-    );
+    redirectToLoginWithError("Invalid email or password.", nextPath);
   }
 
-  redirect(next);
+  revalidatePath("/", "layout");
+  redirect(nextPath);
 }
 
 export async function signOutAction() {
@@ -89,5 +130,6 @@ export async function signOutAction() {
 
   await supabase.auth.signOut();
 
-  redirect("/");
+  revalidatePath("/", "layout");
+  redirect("/login");
 }
