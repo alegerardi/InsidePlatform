@@ -1,91 +1,44 @@
 import Link from "next/link";
-import { requireUser } from "../../../lib/auth/require-user";
-import { validateTicketByQrToken } from "../../../lib/actions/validation";
 
-type ValidateTicketPageProps = {
-  params: Promise<{
-    qrToken: string;
-  }>;
-};
-
-function getResultStyles(success: boolean, result: string) {
-  if (success) {
-    return {
-      box: "border-green-300 bg-green-50 text-green-800",
-      title: "Ticket valid",
-    };
-  }
-
-  if (result === "already_used") {
-    return {
-      box: "border-yellow-300 bg-yellow-50 text-yellow-800",
-      title: "Ticket already used",
-    };
-  }
-
-  if (result === "unauthorized") {
-    return {
-      box: "border-red-300 bg-red-50 text-red-800",
-      title: "Unauthorized",
-    };
-  }
-
-  return {
-    box: "border-red-300 bg-red-50 text-red-800",
-    title: "Ticket not valid",
-  };
-}
-
-export default async function ValidateTicketPage({
-  params,
-}: ValidateTicketPageProps) {
-  await requireUser("/dashboard");
-
-  const { qrToken } = await params;
-  const result = await validateTicketByQrToken(qrToken);
-  const styles = getResultStyles(result.success, result.result);
-
-  const displayMessage =
-    result.result === "error" && result.debug_id
-      ? `${result.message} Reference: ${result.debug_id}`
-      : result.message;
-
+export default function SafeQrValidationPage() {
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
-      <div className={`rounded-lg border p-8 ${styles.box}`}>
-        <p className="text-sm font-medium uppercase tracking-wide">
-          Ticket validation
-        </p>
+    <main className="mx-auto flex min-h-[70vh] max-w-3xl items-center px-6 py-12">
+      <section className="w-full overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.02] shadow-2xl shadow-black/30">
+        <div className="border-b border-white/10 p-8 md:p-10">
+          <p className="text-xs font-medium uppercase tracking-[0.24em] text-white/40">
+            Ticket QR
+          </p>
 
-        <h1 className="mt-3 text-3xl font-bold">{styles.title}</h1>
+          <h1 className="mt-4 text-4xl font-bold tracking-tight text-white">
+            Staff validation required
+          </h1>
 
-        <p className="mt-4">{displayMessage}</p>
+          <p className="mt-5 text-base leading-8 text-white/60">
+            This page does not validate tickets. To check in a guest, event
+            staff must open validation mode from the staff dashboard and scan
+            the ticket QR code there.
+          </p>
+        </div>
 
-        {result.event_title ? (
-          <div className="mt-6 rounded-md bg-white/70 p-4 text-black">
-            <p className="text-sm text-gray-500">Event</p>
-            <p className="font-semibold">{result.event_title}</p>
-          </div>
-        ) : null}
+        <div className="grid gap-4 p-8 md:p-10">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <p className="font-semibold text-white">Why this changed</p>
 
-        {result.ticket_code ? (
-          <div className="mt-4 rounded-md bg-white/70 p-4 text-black">
-            <p className="text-sm text-gray-500">Ticket code</p>
-            <p className="font-mono text-xl font-semibold">
-              {result.ticket_code}
+            <p className="mt-2 text-sm leading-6 text-white/50">
+              Opening a QR link in a browser should never perform a check-in.
+              Ticket validation is now handled only through the secure staff
+              scanner flow.
             </p>
           </div>
-        ) : null}
 
-        <div className="mt-8 flex flex-wrap gap-4">
           <Link
             href="/dashboard"
-            className="rounded-md bg-black px-5 py-3 font-medium text-white"
+            className="inline-flex w-fit rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-85"
           >
             Go to dashboard
           </Link>
         </div>
-      </div>
+      </section>
     </main>
   );
 }

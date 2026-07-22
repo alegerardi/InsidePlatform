@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { TicketQrCode } from "../../../components/tickets/ticket-qr-code";
 import { requireUser } from "../../../lib/auth/require-user";
 import { getTicket } from "../../../lib/tickets/get-ticket";
-import { getBaseUrl } from "../../../lib/url/get-base-url";
 
 type TicketPageProps = {
   params: Promise<{
@@ -74,8 +73,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
     notFound();
   }
 
-  const baseUrl = await getBaseUrl();
-  const validationUrl = `${baseUrl}/validate/${ticket.qr_token}`;
+  const qrPayload = ticket.qr_token;
   const event = ticket.events;
 
   const eventTitle = event?.title ?? "Event";
@@ -146,7 +144,7 @@ export default async function TicketPage({ params }: TicketPageProps) {
           </div>
 
           <div className="flex flex-col items-center justify-center">
-            <TicketQrCode validationUrl={validationUrl} />
+            <TicketQrCode qrPayload={qrPayload} />
 
             <p className="mt-5 text-center text-sm text-white/45">
               Scan at the entrance
