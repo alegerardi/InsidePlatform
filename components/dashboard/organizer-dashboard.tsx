@@ -7,6 +7,8 @@ import type {
   OrganizerEventGroups,
 } from "../../lib/events/get-organizer-events";
 import { CopyEventLinkButton } from "../events/copy-event-link-button";
+import { CancelEventCard } from "../events/cancel-event-card";
+
 
 type EventCategory = "upcoming" | "ongoing" | "past";
 type OrganizerTab = "overview" | "staff" | "links" | "actions";
@@ -90,20 +92,12 @@ function EventSelector({
 }) {
   return (
     <aside className="rounded-3xl border border-white/10 bg-white/[0.02] p-4">
-      <div className="mb-4 flex items-center justify-between gap-3 px-2">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-white/35">
-            Parties
-          </p>
-          <p className="mt-1 text-sm text-white/50">{events.length} events</p>
-        </div>
+      <div className="mb-4 px-2">
+        <p className="text-xs font-medium uppercase tracking-[0.22em] text-white/35">
+          Parties
+        </p>
 
-        <Link
-          href="/events/new"
-          className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:opacity-85"
-        >
-          New
-        </Link>
+        <p className="mt-1 text-sm text-white/50">{events.length} events</p>
       </div>
 
       <div className="grid gap-2">
@@ -137,7 +131,7 @@ function EventSelector({
                 </div>
 
                 <span className="rounded-full border border-white/15 px-2 py-0.5 text-xs text-white/50">
-                  {event.category}
+                  {getEventBadgeLabel(event)}
                 </span>
               </div>
 
@@ -381,56 +375,97 @@ function LinksTab({
   );
 }
 
-function ActionsTab({ event }: { event: EventWithCategory }) {
-  const publicPath = event.slug ? `/events/${event.slug}` : null;
+function ActionsTab({
+  event,
+  feedback,
+}: {
+  event: EventWithCategory;
+  feedback?: OrganizerFeedback;
+}) {
+  const isPublic = event.status === "published" || event.status === "active";
+  const publicPath = isPublic && event.slug ? `/events/${event.slug}` : null;
   const statsPath = event.slug ? `/events/${event.slug}/stats` : null;
   const editPath = event.slug ? `/events/${event.slug}/edit` : null;
-  const canEdit = event.category === "upcoming";
+  const canEdit =
+    event.category === "upcoming" &&
+    event.status !== "cancelled" &&
+    event.status !== "completed";
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {publicPath ? (
-        <Link
-          href={publicPath}
-          className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:bg-white/[0.06]"
-        >
-          <p className="font-semibold text-white">Open public page</p>
-          <p className="mt-2 text-sm text-white/45">View the client-facing page.</p>
-        </Link>
-      ) : null}
+    <div className="grid gap-5">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {publicPath ? (
+          <Link
+            href={publicPath}
+            className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:bg-white/[0.06]"
+          >
+            <p className="font-semibold text-white">Open public page</p>
+            <p className="mt-2 text-sm text-white/45">
+              View the client-facing page.
+            </p>
+          </Link>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <p className="font-semibold text-white">Public page hidden</p>
+            <p className="mt-2 text-sm text-white/45">
+              This event is not visible to clients.
+            </p>
+          </div>
+        )}
 
-      {statsPath ? (
-        <Link
-          href={statsPath}
-          className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:bg-white/[0.06]"
-        >
-          <p className="font-semibold text-white">Statistics</p>
-          <p className="mt-2 text-sm text-white/45">
-            See sales, guest list, views, and entrances.
-          </p>
-        </Link>
-      ) : null}
+        {statsPath ? (
+          <Link
+            href={statsPath}
+            className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:bg-white/[0.06]"
+          >
+            <p className="font-semibold text-white">Statistics</p>
+            <p className="mt-2 text-sm text-white/45">
+              See sales, guest list, views, and entrances.
+            </p>
+          </Link>
+        ) : null}
 
-      {canEdit && editPath ? (
-        <Link
-          href={editPath}
-          className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:bg-white/[0.06]"
-        >
-          <p className="font-semibold text-white">Edit event</p>
-          <p className="mt-2 text-sm text-white/45">
-            Update event details and ticket types.
-          </p>
-        </Link>
-      ) : (
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-          <p className="font-semibold text-white">Editing locked</p>
-          <p className="mt-2 text-sm text-white/45">
-            Only upcoming events can be edited.
-          </p>
-        </div>
-      )}
+        {canEdit && editPath ? (
+          <Link
+            href={editPath}
+            className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:bg-white/[0.06]"
+          >
+            <p className="font-semibold text-white">Edit event</p>
+            <p className="mt-2 text-sm text-white/45">
+              Update event details and ticket types.
+            </p>
+          </Link>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+            <p className="font-semibold text-white">Editing locked</p>
+            <p className="mt-2 text-sm text-white/45">
+              Only upcoming events can be edited.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <CancelEventCard
+        eventId={event.id}
+        eventSlug={event.slug}
+        status={event.status}
+        category={event.category}
+        feedback={feedback}
+      />
     </div>
   );
+}
+
+function getEventBadgeLabel(event: EventWithCategory) {
+  if (event.status === "cancelled") {
+    return "cancelled";
+  }
+
+  if (event.status === "completed") {
+    return "completed";
+  }
+
+  return event.category;
 }
 
 function SelectedEventPanel({
@@ -493,7 +528,9 @@ function SelectedEventPanel({
           <LinksTab event={event} baseUrl={baseUrl} />
         ) : null}
 
-        {selectedTab === "actions" ? <ActionsTab event={event} /> : null}
+        {selectedTab === "actions" ? (
+          <ActionsTab event={event} feedback={feedback} />
+        ) : null}
       </div>
     </section>
   );
