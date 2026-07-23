@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "../auth/require-user";
 import { createClient } from "../supabase/server";
+import type { Database } from "@/lib/supabase/database.types";
 
 type TicketCapacityPool = "paid" | "guest_list";
 
@@ -262,9 +263,10 @@ export async function updateEventAction(formData: FormData) {
 
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc(
-    "update_upcoming_event_with_ticket_types",
-    {
+  type UpdateEventArgs =
+  Database["public"]["Functions"]["update_upcoming_event_with_ticket_types"]["Args"];
+
+    const updateEventArgs = {
       target_event_id: eventId,
       new_title: title,
       new_description: description || null,
@@ -274,8 +276,12 @@ export async function updateEventAction(formData: FormData) {
       new_max_tickets: maxTickets,
       new_max_guest_list: maxGuestList,
       ticket_types_json: ticketTypes,
-    }
-  );
+    } as unknown as UpdateEventArgs;
+
+    const { data, error } = await supabase.rpc(
+      "update_upcoming_event_with_ticket_types",
+      updateEventArgs
+    );
 
   if (error) {
     const debugId = crypto.randomUUID();

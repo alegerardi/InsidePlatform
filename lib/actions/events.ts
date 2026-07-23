@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "../auth/require-user";
 import { slugify } from "../events/slugify";
 import { createClient } from "../supabase/server";
+import type { Database } from "@/lib/supabase/database.types";
 
 type TicketCapacityPool = "paid" | "guest_list";
 
@@ -214,9 +215,12 @@ export async function createEventAction(formData: FormData) {
     );
   }
 
-  const supabase = await createClient();
+    const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("create_event_with_ticket_types", {
+  type CreateEventArgs =
+    Database["public"]["Functions"]["create_event_with_ticket_types"]["Args"];
+
+  const createEventArgs = {
     new_title: title,
     new_description: description,
     new_location: location,
@@ -226,7 +230,12 @@ export async function createEventAction(formData: FormData) {
     new_max_guest_list: maxGuestList,
     new_slug_base: slugify(title),
     ticket_types_json: ticketTypes,
-  });
+  } as unknown as CreateEventArgs;
+
+  const { data, error } = await supabase.rpc(
+    "create_event_with_ticket_types",
+    createEventArgs
+  );
 
   if (error) {
     const debugId = crypto.randomUUID();

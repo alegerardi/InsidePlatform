@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseConfig } from "./config";
+import type { Database } from "./database.types";
 
 function getSafeNextPath(request: NextRequest) {
   const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
@@ -19,7 +20,7 @@ export async function updateSession(request: NextRequest) {
 
   const { supabaseUrl, supabaseKey } = getSupabaseConfig();
 
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
+  const supabase = createServerClient<Database>(supabaseUrl, supabaseKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
