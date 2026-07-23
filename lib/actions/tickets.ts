@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getUser } from "../auth/get-user";
+import { checkInMemoryRateLimit } from "../rate-limit/in-memory-rate-limit";
 import { createClient } from "../supabase/server";
 
 type ClaimTicketResponse = {
@@ -21,6 +22,11 @@ type ClaimTicketResponse = {
   ticket_price_cents?: number;
   ticket_currency?: string;
   debug_id?: string;
+};
+
+const TICKET_CLAIM_RATE_LIMIT = {
+  limit: 10,
+  windowMs: 60_000,
 };
 
 function getString(formData: FormData, key: string) {
@@ -65,6 +71,20 @@ export async function claimTicketAction(formData: FormData) {
       eventSlug,
       "error",
       "Choose a ticket type before claiming your ticket."
+    );
+  }
+
+  const rateLimitResult = checkInMemoryRateLimit({
+    key: `ticket-claim:${user.id}:${eventId}`,
+    limit: TICKET_CLAIM_RATE_LIMIT.limit,
+    windowMs: TICKET_CLAIM_RATE_LIMIT.windowMs,
+  });
+
+  if (!rateLimitResult.allowed) {
+    redirectToEventWithMessage(
+      eventSlug,
+      "error",
+      `Too many ticket claim attempts. Please wait ${rateLimitResult.retryAfterSeconds} seconds and try again.`
     );
   }
 
