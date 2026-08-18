@@ -85,11 +85,26 @@ suite("event creation and cancellation rules", () => {
   }, TEST_TIMEOUT_MS);
 
   it("rejects a negative ticket price without creating an event", async () => {
-    const before = await ctx.admin.from("events").select("id", { count: "exact", head: true });
-    const result = await invalidCreate({ ticket_types_json: [{ title: "Bad", price_cents: -1, max_quantity: 1, capacity_pool: "paid" }] });
-    const after = await ctx.admin.from("events").select("id", { count: "exact", head: true });
+    const invalidEventTitle = `Negative price ${randomUUID()}`;
+    const result = await invalidCreate({
+      new_title: invalidEventTitle,
+      ticket_types_json: [
+        {
+          title: "Bad",
+          price_cents: -1,
+          max_quantity: 1,
+          capacity_pool: "paid",
+        },
+      ],
+    });
+    const { count, error } = await ctx.admin
+      .from("events")
+      .select("id", { count: "exact", head: true })
+      .eq("title", invalidEventTitle);
+
     expect(result.result).toBe("invalid_ticket_types");
-    expect(after.count).toBe(before.count);
+    expect(error).toBeNull();
+    expect(count).toBe(0);
   }, TEST_TIMEOUT_MS);
 
   it("allows cancellation with only free guest-list tickets and cancels them", async () => {
