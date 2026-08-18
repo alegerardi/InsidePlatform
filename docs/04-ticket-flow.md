@@ -1,364 +1,159 @@
 # Ticket Flow
 
-## Purpose
+## Shared business rules
 
-The ticket flow controls how users claim, view, and use tickets for events.
+- A logged-in user can hold only one ticket per event.
+- The database enforces `unique(event_id, user_id)`.
+- Each ticket has a unique `ticket_code` and `qr_token`.
+- Capacity is enforced server-side and atomically in the database.
+- A browser never decides ticket eligibility or payment success.
 
-The MVP must support:
+## Implemented ticket flow
 
-- ticket creation for logged-in users
-- one ticket per user per event
-- event-specific ticket limits
-- sold-out states
-- duplicate ticket prevention
-- ticket code generation
-- QR token generation
-- ticket display in the client dashboard
+The current application does not collect online payments. Ticket types may have a nominal price and belong to `paid` or `guest_list` capacity pools, but claiming currently issues a ticket without payment.
 
-The ticket flow must be simple, secure, and reliable.
+Current flow:
 
-## Main Business Rule
+1. A user opens `/events/[slug]` and selects an available ticket type.
+2. An unauthenticated user is redirected to login/signup with a sanitized return path.
+3. The server verifies the user, event status, ticket type, capacity pool, and availability.
+4. If the user already has a ticket for the event, the existing ticket is returned.
+5. Otherwise, the database atomically creates a ticket with secure unique codes.
+6. The user is redirected to `/tickets/[ticketId]` and can also see the ticket on `/dashboard`.
 
-A user can have only one ticket per event.
+Allowed event statuses for claiming are `published` and `active`. Draft, completed, and cancelled events do not issue tickets.
 
-This must be enforced in both application logic and the database.
+## Implemented capacity model
 
-Required database constraint:
+Each event has separate paid and guest-list capacity. Ticket types consume one configured capacity pool and can also have a type-level maximum.
 
-- unique(event_id, user_id)
+Availability must account for active and used tickets. Public availability is informational; the database operation remains authoritative under concurrency.
 
-## Ticket Creation Entry Point
+## Planned — free-ticket flow after payments
 
-A user starts the ticket flow from an event page.
+Free ticket types keep a direct claim flow:
 
-Example route:
+1. Authenticate the client.
+2. Verify the event and ticket type are available.
+3. Atomically enforce event, pool, type, and one-user-per-event capacity.
+4. Create the ticket immediately.
 
-- /events/[eventId]
+Free claims:
 
-The event page should show a button such as:
+- Do not create an order or provider payment.
+- Do not charge a platform fee.
+- Do not create a temporary payment reservation.
+- Do not lock event fee configuration.
+- Still prevent the user from later purchasing another ticket for the same event.
 
-- Claim Ticket
-- Get Ticket
+## Planned — paid-ticket flow
 
-## Ticket Creation Flow
+One authenticated client purchases exactly one ticket for themselves.
 
-When a user clicks to claim a ticket:
+### Checkout preparation
 
-1. Check whether the user is authenticated.
-2. If the user is not authenticated, redirect to login or signup.
-3. Preserve the selected event ID during the redirect.
-4. After login or signup, continue the ticket creation flow.
-5. Check whether the event exists.
-6. Check whether the event status allows ticket creation.
-7. Check whether the user already has a ticket for this event.
-8. Check whether the event still has available ticket capacity.
-9. If the user already has a ticket, show the existing ticket.
-10. If the event is full, show a sold-out message.
-11. If all checks pass, create a ticket.
-12. Generate a unique ticket code.
-13. Generate a unique QR token.
-14. Save the ticket.
-15. Show the ticket and QR code to the user.
+1. Verify the client has no ticket or active/paid order for the event.
+2. Verify the event is public, has not started, and permits paid sales.
+3. Verify the selected ticket type has a positive EUR price.
+4. Verify the organizer's merchant account has payments and payouts enabled.
+5. Read the event fee configuration.
+6. Calculate monetary values in integer cents using basis points and nearest-cent rounding.
+7. Atomically create an order and reserve one unit of event, pool, and ticket-type capacity for 15 minutes.
+8. Create a provider payment attempt and checkout session outside the database transaction.
+9. Save the provider-neutral external references.
+10. Redirect the client to provider-hosted checkout.
 
-## Unauthenticated User Flow
+If checkout creation fails, mark the attempt failed and release or expire the reservation safely.
 
-If a non-logged-in user tries to claim a ticket:
+### Fee calculation
 
-1. Redirect to /login.
-2. Keep track of the requested event.
-3. After successful login, continue the ticket claim flow.
-4. If the user does not have an account, allow signup.
-5. After signup, continue the ticket claim flow.
+For nominal price `P` cents and `B` basis points:
 
-The app should not lose the selected event during authentication.
+```text
+platform fee = round_to_nearest_cent(P × B / 10000)
+```
 
-Possible redirect pattern:
+Customer-paid mode:
 
-- /login?next=/events/[eventId]&claimTicket=true
+```text
+customer total = nominal price + platform fee
+organizer proceeds = nominal price
+```
 
-The exact implementation can be chosen after analyzing the current codebase.
+Organizer-paid mode:
 
-## Event Status Check
+```text
+customer total = nominal price
+organizer proceeds = nominal price - platform fee
+```
 
-Tickets should only be created for valid events.
+Inside Platform's final net is its gross platform fee minus actual provider processing and applicable provider costs. The platform absorbs this variation.
 
-Allowed statuses for ticket creation:
+### Payment confirmation
 
-- published
-- active
+The checkout return page is informational and may poll or fetch order status. It never marks an order paid.
 
-Tickets should not be created for events with these statuses:
+A verified provider webhook must:
 
-- draft
-- completed
-- cancelled
-
-## Capacity Check
-
-Each event has its own ticket limit.
-
-Relevant event field:
-
-- max_tickets
-
-Before creating a ticket, count how many active or used tickets already exist for the event.
-
-If the number is equal to or greater than max_tickets, the event is sold out.
-
-Sold-out behavior:
-
-- do not create a ticket
-- do not generate a QR code
-- show a clear sold-out message
-
-## Duplicate Ticket Check
-
-Before creating a ticket, check whether the user already has a ticket for the selected event.
-
-If the user already has a ticket:
-
-- do not create another ticket
-- show the existing ticket
-- show the existing QR code
-
-This prevents accidental duplicate tickets.
-
-## Ticket Data
-
-The tickets table should include:
-
-- id
-- event_id
-- user_id
-- ticket_code
-- qr_token
-- status
-- created_at
-- used_at
-- used_by
-
-## Ticket Status Values
-
-Valid ticket statuses:
-
-- active
-- used
-- cancelled
-- expired
-- invalid
-
-## Ticket Status Meaning
-
-### active
-
-The ticket was created and can still be validated.
-
-### used
-
-The ticket has already been validated at the entrance.
-
-### cancelled
-
-The ticket was cancelled and cannot be used.
-
-### expired
-
-The ticket is no longer valid because the event has ended or the ticket expired.
-
-### invalid
-
-The ticket is marked as invalid because of an error, fraud, or manual administrative action.
-
-## Ticket Code
-
-The ticket code is a human-readable code that can be manually entered by staff.
-
-The ticket code must be unique.
-
-Required database constraint:
-
-- unique(ticket_code)
-
-The ticket code should not be easily predictable.
-
-## QR Token
-
-The QR token is a secure unique token used for QR code validation.
-
-The QR token must be unique.
-
-Required database constraint:
-
-- unique(qr_token)
-
-The QR token should not be based only on predictable values such as:
-
-- user ID
-- event ID
-- email
-- sequential ticket number
-
-The QR token should be generated securely.
-
-## QR Payload
-
-The QR code should contain a value that allows the server to identify the ticket.
-
-Recommended simple MVP payload:
-
-- qr_token
-
-The frontend displays this token as a QR code.
-
-The server uses this token to find and validate the ticket.
-
-The QR code itself must not decide whether the ticket is valid.
-
-## Ticket Display
-
-After ticket creation, the user should see:
-
-- event title
-- event date
-- event location
-- ticket code
-- QR code
-- ticket status
-
-The ticket should be visible in:
-
-- /dashboard
-
-Optionally, the ticket can also be visible in:
-
-- /tickets/[ticketId]
-
-## Client Dashboard Ticket States
-
-The client dashboard should support these states.
-
-### No tickets
-
-Show:
-
-- You do not have any tickets yet.
-
-Optionally show public events.
-
-### Has active ticket
-
-Show:
-
-- event information
-- ticket code
-- QR code
-- ticket status
-
-### Has used ticket
-
-Show the ticket as already used.
-
-### Has cancelled or expired ticket
-
-Show the ticket as unavailable.
-
-## Server-Side Rules
-
-Ticket creation must happen server-side.
-
-The client cannot directly decide:
-
-- whether the event has capacity
-- whether the user already has a ticket
-- whether the ticket is valid
-- what role the user has
-- what user ID the ticket belongs to
-
-The server must use the authenticated user ID.
-
-The client must not be able to create a ticket for another user.
-
-## Recommended Server Action Behavior
-
-The ticket creation logic should receive:
-
-- event_id
-
-The server should read:
-
-- authenticated user ID
-- user profile
-- event data
-- existing ticket data
-- current ticket count
-
-The server should return a structured result.
-
-Possible result values:
-
-- success
-- already_has_ticket
-- sold_out
-- event_not_found
-- event_not_available
-- unauthorized
-- error
-
-## Errors and User Messages
-
-### Success
-
-Message:
-
-- Ticket created successfully.
-
-### Existing Ticket
-
-Message:
-
-- You already have a ticket for this event.
-
-### Sold Out
-
-Message:
-
-- This event is sold out.
-
-### Event Not Found
-
-Message:
-
-- Event not found.
-
-### Event Not Available
-
-Message:
-
-- Tickets are not available for this event.
-
-### Not Logged In
-
-Message:
-
-- Please log in to claim your ticket.
-
-### Server Error
-
-Message:
-
-- Something went wrong while creating your ticket.
-
-## MVP Acceptance Criteria
-
-The ticket flow is correct when:
-
-- unauthenticated users are redirected to login or signup before ticket creation
-- logged-in clients can create tickets
-- users cannot create more than one ticket for the same event
-- event capacity is respected
-- sold-out events block new tickets
-- each ticket receives a unique ticket code
-- each ticket receives a unique QR token
-- users can see their tickets in the client dashboard
-- users cannot create tickets for other users
-- ticket creation is handled server-side
+1. Be stored and deduplicated by provider event ID.
+2. Locate the payment attempt and order.
+3. Verify amount, currency, merchant destination, and expected state.
+4. Atomically mark the payment and order paid.
+5. Consume the active reservation.
+6. Create exactly one usable ticket with immutable snapshots.
+7. Lock the event fee configuration if this is its first successful paid order.
+8. Record audit evidence.
+
+Repeated events must return the existing result without issuing another ticket.
+
+### Failed and abandoned checkout
+
+Initial order states are:
+
+```text
+pending
+processing
+paid
+failed
+expired
+disputed
+```
+
+- Failed attempts never issue tickets or lock fees.
+- An unpaid reservation expires after 15 minutes and releases capacity.
+- A late provider success must be handled explicitly and never oversell silently.
+- Payment retries are new attempt records; history is never overwritten.
+
+See `07-payment-lifecycle.md` for state transitions and late-event behavior.
+
+## Fee and price locking
+
+- Event fee defaults to `1000` basis points (10%).
+- Fee payer defaults to `customer`.
+- Admins may change either value before the first successful paid order.
+- The first successful paid order locks both values for the entire event.
+- Free tickets, failed payments, and expired orders do not lock them.
+- Refunds and disputes do not unlock them.
+- A ticket type's price locks after its first successful paid purchase.
+- A sold type may be deactivated but not financially rewritten.
+- New types may be added before the event starts if capacity remains and must use the locked event fee policy.
+
+## Event cancellation
+
+- Events with no successful paid orders may use the current cancellation rules.
+- An event with any successful paid order cannot be cancelled through the organizer interface.
+- Cancellation then requires an exceptional admin-managed process with audit evidence.
+- The first paid MVP has no customer refund or partial-refund interface.
+
+## Ticket display
+
+Tickets show event, date, location, ticket type, nominal price/currency snapshot, ticket code, QR code, and status. Paid-order financial details belong to the order/receipt view and must not be inferred from mutable ticket-type data.
+
+## Out of scope for the first paid MVP
+
+- Multiple tickets in one order.
+- Buying for another attendee.
+- Ticket transfers.
+- Customer-requested refunds and partial refunds.
+- Currencies other than EUR.
+- VAT calculation or Stripe Tax.

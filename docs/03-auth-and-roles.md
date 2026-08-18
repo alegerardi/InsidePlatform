@@ -1,331 +1,153 @@
 # Authentication and Roles
 
-## Purpose
+## Implemented authentication
 
-The platform uses authentication and role-based authorization to control what each user can see and do.
+Supabase Auth provides signup, login, logout, session handling, and the auth callback. A database trigger creates a `profiles` row for each new auth user with role `client`.
 
-Authentication answers: who is the user?
+Authentication establishes identity. Authorization determines which data and operations that identity can access. Sensitive authorization must be enforced on the server and in Supabase RLS/RPC logic, never only in the browser.
 
-Authorization answers: what is this user allowed to do?
+## Implemented roles
 
-The MVP must support:
+### `client`
 
-- user signup
-- user login
-- user logout
-- profile creation
-- default client role
-- manually assigned elevated roles
-- protected routes
-- role-dependent dashboards
-- server-side authorization checks
+Clients can:
 
-## User Roles
+- View public event pages.
+- Claim one ticket per event under the current non-payment flow.
+- View their own tickets and QR codes.
+- Use the client dashboard.
 
-The MVP has four roles:
+Clients cannot view unrelated tickets, validate entry, manage events, or change roles.
 
-- client
-- event_organizer
-- event_staff
-- admin
+### `event_organizer`
 
-New users are clients by default.
+Organizers can:
 
-Other roles are manually assigned in the database during the MVP phase.
+- Create and manage their own events and ticket types.
+- View their own event groups and statistics.
+- Assign and remove staff for their events.
+- Cancel an eligible event under the current no-revenue rule.
 
-## Role: client
+Organizers cannot manage another organizer's events, assign platform roles, or validate tickets unless separately authorized through a supported role model.
 
-The client role is the default role for all new users.
+### `event_staff`
 
-A client can:
+Staff can:
 
-- view public event pages
-- claim tickets for events
-- view their own tickets
-- view their own QR codes
-- access the client dashboard
+- View assigned events in the staff dashboard.
+- Open `/staff/events/[eventId]/validate` for an assigned event.
+- Scan QR tokens or enter ticket codes manually.
+- Trigger server-side validation only for assigned events.
 
-A client cannot:
+Staff cannot create events, access unrelated private data, validate other events, or change roles.
 
-- access organizer dashboards
-- access the staff authentication page
-- validate tickets
-- view other users' tickets
-- view event statistics
-- change their own role
+### `admin`
 
-## Role: event_organizer
+The admin role has broad database authorization and can use the shared dashboard, create events, and access protected data where current pages/actions support it.
 
-An event organizer manages their own events.
+The current `AdminDashboard` is a placeholder. A complete interface for global users, events, tickets, check-ins, statistics, roles, payments, and operational actions is not implemented. Documentation must not imply that database authority automatically means every admin UI exists.
 
-An event organizer can:
+Admins are rare and manually assigned during the MVP.
 
-- create events
-- view events they own
-- view statistics for their own events
-- see ticket counts for their own events
-- see check-in counts for their own events
-- see remaining capacity for their own events
+## Role-aware dashboard
 
-An event organizer cannot:
+`/dashboard` authenticates the user, loads the profile, and renders one module through the shared dashboard shell:
 
-- view events owned by other organizers
-- access global admin statistics
-- validate tickets unless they are also event_staff or admin
-- change platform-level user roles
+- `ClientDashboard`
+- `OrganizerDashboard`
+- `StaffDashboard`
+- `AdminDashboard`
 
-## Role: event_staff
+This is one role-aware dashboard architecture, not four independent systems.
 
-Event staff validate tickets at the entrance.
+## Current route access
 
-Event staff can:
+Public routes include:
 
-- access the staff dashboard
-- access the authenticate page
-- validate tickets for assigned events
-- scan QR codes
-- manually enter ticket codes
-- create check-in records through validation actions
+- `/`
+- `/login`
+- `/signup`
+- `/events/[slug]`
 
-Event staff cannot:
+Authenticated routes include:
 
-- create events
-- view global statistics
-- validate tickets for events they are not assigned to
-- view private client data unrelated to validation
-- change user roles
+- `/dashboard`
+- `/tickets/[ticketId]`
+- Organizer-owned `/events/new`, `/events/[slug]/edit`, and `/events/[slug]/stats` flows.
+- Assigned-staff `/staff/events/[eventId]/validate` flows.
 
-## Role: admin
+Internal/state-changing routes include:
 
-Admin is the highest permission level.
+- `/auth/callback`
+- POST `/staff/events/[eventId]/scan`
 
-An admin can:
+`/validate/[qrToken]` is a safe informational route. Opening it does not validate or consume a ticket.
 
-- access all dashboards
-- view all users
-- view all events
-- view all tickets
-- view all check-ins
-- validate tickets for any event
-- view global platform statistics
-- manually change user roles
+## Server-side authorization principles
 
-Admins should be rare and manually assigned.
+- Use the authenticated user ID; never accept an acting user ID from the browser.
+- Read roles and ownership from the database.
+- Clients access only their own private ticket data.
+- Organizers manage only their own events.
+- Staff validate only assigned events.
+- Admin behavior still requires explicit server-side checks.
+- Unauthenticated users are redirected to login with a sanitized return path where applicable.
+- Unauthorized authenticated page access redirects to `/unauthorized` or returns a safe authorization error.
+- Secret and service-role keys never enter client bundles.
 
-## Default Signup Behavior
+## Planned — approved payment permissions
 
-When a new user signs up:
+### Client
 
-1. A new authentication user is created.
-2. A new profile row is created.
-3. The profile role is set to client by default.
+For a paid ticket, a client will be allowed to:
 
-Default role:
+- Purchase exactly one ticket for themselves per event.
+- Create a pending order and temporary reservation through an authenticated server operation.
+- Open provider checkout for that order.
+- View only their own order and payment status.
 
-- client
+A client cannot mark an order paid, choose financial snapshots, change fees, or issue a ticket. Only verified provider events drive payment confirmation.
 
-No new user should automatically become event_organizer, event_staff, or admin.
+### Organizer
 
-## Manual Role Assignment
+An organizer will be allowed to:
 
-During the MVP phase, elevated roles are assigned manually in the database.
+- Start provider-hosted merchant onboarding.
+- View their onboarding, payment, and payout capability status.
+- Create drafts before onboarding completes.
+- Run free events without payment onboarding.
+- Publish paid ticket types only when payments and payouts are enabled.
+- View financial information for their own events and orders.
 
-The app does not need a complete role management interface yet.
+An organizer cannot edit the event platform fee or fee payer, alter immutable financial snapshots, or normally cancel an event after a successful paid order.
 
-Valid role values:
+### Admin
 
-- client
-- event_organizer
-- event_staff
-- admin
+The exclusive planned admin payment interface will allow authorized admins to:
 
-Only admins should be allowed to update roles through application logic.
+- Configure an event's platform fee in basis points.
+- Choose `customer` or `organizer` as fee payer.
+- Edit these settings only before the first successful paid order.
+- See the order and timestamp that locked the configuration.
+- Review orders, provider costs, organizer proceeds, platform net, webhook state, and disputes.
+- Perform documented exceptional operations for paid-event cancellation and disputes.
 
-## Profiles Table
+Exceptional actions require stronger audit records and must not silently rewrite payment history.
 
-The profiles table stores user profile and role data.
+## Organizer payment eligibility
 
-Required fields:
+Paid ticket publication requires a provider-neutral merchant-account state equivalent to:
 
-- id
-- full_name
-- email
-- role
-- created_at
-- updated_at
+```text
+onboarding_status = complete
+payments_enabled = true
+payouts_enabled = true
+```
 
-Rules:
+Stripe-hosted Connect onboarding is the first implementation. Inside Platform stores provider account references and status, not identity documents or bank credentials.
 
-- id references the authenticated user ID.
-- role is client by default.
-- only admins should change role values.
-- the app must never trust role values sent from the browser.
+## Terms and evidence
 
-## Role-Based Dashboard
+Before paid checkout, the authenticated client must receive the organizer identity, nominal ticket price, `+ fees` disclosure, exact checkout breakdown, no-refund policy subject to law, event-cancellation policy, privacy notice, and applicable terms.
 
-The dashboard route should be:
-
-- /dashboard
-
-This route should be role-aware.
-
-After login, the app should:
-
-1. Read the authenticated user.
-2. Fetch the user's profile.
-3. Read the user's role.
-4. Render the correct dashboard module.
-
-Dashboard modules:
-
-- ClientDashboard
-- OrganizerDashboard
-- StaffDashboard
-- AdminDashboard
-
-Do not create four unrelated dashboard systems.
-
-The /dashboard page should behave as a role-aware dashboard container.
-
-## Protected Routes
-
-These routes require authentication:
-
-- /dashboard
-- /tickets/[ticketId]
-- /authenticate
-
-These routes may be public:
-
-- /
-- /login
-- /signup
-- /events/[eventId]
-
-## Route Access Rules
-
-### /dashboard
-
-Allowed roles:
-
-- client
-- event_organizer
-- event_staff
-- admin
-
-Behavior:
-
-- render the correct dashboard module based on role
-
-### /authenticate
-
-Allowed roles:
-
-- event_staff
-- admin
-
-Not allowed:
-
-- unauthenticated users
-- client
-- event_organizer unless future logic explicitly allows it
-
-### /tickets/[ticketId]
-
-Allowed users:
-
-- the ticket owner
-- admin
-- authorized staff only during validation-related flows if needed
-
-Not allowed:
-
-- unrelated clients
-- unrelated staff
-- unrelated organizers
-
-### Organizer event statistics
-
-Allowed users:
-
-- organizer who owns the event
-- admin
-
-Not allowed:
-
-- other organizers
-- clients
-- unrelated staff
-
-## Server-Side Authorization
-
-Authorization must not depend only on frontend checks.
-
-Frontend checks are useful for hiding buttons and pages, but they are not enough.
-
-Every sensitive operation must be protected server-side.
-
-Sensitive operations include:
-
-- creating tickets
-- validating tickets
-- reading event statistics
-- reading tickets
-- assigning staff
-- updating event data
-- changing user roles
-
-## Authorization Principles
-
-Use these principles:
-
-- clients can only access their own data
-- event_organizers can only access their own events
-- event_staff can only validate assigned events
-- admins can access everything
-- unauthenticated users cannot perform protected actions
-
-## Unauthorized Behavior
-
-If a user is not logged in and tries to access a protected page:
-
-- redirect to /login
-
-If a logged-in user tries to access a forbidden page:
-
-- redirect to /unauthorized
-
-If a user tries to perform an unauthorized server action:
-
-- return an authorization error
-- do not perform the action
-
-## Security Rules
-
-The app must never expose secret keys in client-side code.
-
-The app must never trust role values sent from the browser.
-
-The app must always read the authenticated user's role from the database.
-
-The app must not allow users to change their own role.
-
-The app must not allow clients to create tickets for other users.
-
-The app must not allow staff to validate tickets for unassigned events.
-
-## MVP Acceptance Criteria
-
-Authentication and roles are correctly implemented when:
-
-- new users are created as clients by default
-- users can sign up
-- users can log in
-- users can log out
-- /dashboard renders different modules based on role
-- clients cannot access /authenticate
-- event_staff users can access /authenticate
-- admins can access all protected areas
-- role checks happen server-side
-- users cannot access other users' private tickets
-- organizers cannot see events they do not own
+The order must record the accepted terms version, acceptance timestamp, and proportionate request evidence. Evidence access is restricted and follows a retention policy.

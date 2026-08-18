@@ -139,18 +139,46 @@ Before real entrance operations:
 
 ## 9. Payments
 
-Payments are not implemented yet.
+Payments are not implemented yet. The approved design is documented in:
+
+- `docs/06-payments-and-fees.md`
+- `docs/07-payment-lifecycle.md`
 
 Before selling paid tickets online:
 
-- Add provider-neutral order tables.
-- Add payment attempts.
-- Add webhook event idempotency.
-- Add refund handling.
-- Add organizer payment accounts.
-- Add ledger entries.
-- Add Stripe through a provider adapter.
-- Do not make the whole database Stripe-shaped.
+- Confirm legally that the organizer is the ticket seller and Inside Platform is the intermediary.
+- Add provider-neutral merchant account, order, reservation, payment attempt, payment, transfer, dispute, provider-event, and reconciliation records.
+- Keep Stripe-specific objects and identifiers behind a payment-provider adapter.
+- Implement Stripe-hosted organizer onboarding.
+- Require payments and payouts capabilities before publishing paid ticket types.
+- Use EUR only in the first paid release.
+- Use integer cents, basis points, and the documented nearest-cent rounding rule.
+- Default the event platform fee to `1000` basis points and the fee payer to `customer`.
+- Enforce fee and price locking in the database after the first successful paid order.
+- Implement atomic 15-minute capacity reservations.
+- Issue tickets only after signature-verified, idempotently processed provider events.
+- Reconcile actual provider fees, organizer transfers, provider-managed payouts, and platform net.
+- Block normal event cancellation after any successful paid order.
+- Add exceptional admin processes with full audit records.
+- Implement dispute recording, evidence, unused-ticket invalidation, and organizer-value recovery.
+- Do not enable Stripe Tax in the first paid MVP.
+- Do not add customer or partial refund interfaces in the first paid MVP.
+- Still recognize and audit refunds or reversals made outside the application.
+- Never store raw card, bank, or organizer identity-document data.
+
+Required paid-flow tests include:
+
+- Concurrent checkout attempts for the last ticket.
+- Reservation expiry and release.
+- Free claim racing a paid reservation.
+- Failed checkout and payment retry.
+- Duplicate and out-of-order webhooks.
+- Late success after reservation expiry.
+- Amount, currency, organizer destination, and provider-reference mismatches.
+- Atomic single-ticket issuance.
+- Fee configuration edits racing the first successful payment.
+- Paid-event cancellation rejection.
+- Unused- and used-ticket dispute behavior.
 
 ## 10. Analytics
 
@@ -221,5 +249,7 @@ Remaining before serious production traffic:
 - Add more integration tests.
 - Add monitoring/logging strategy.
 - Add production Supabase backup/restore plan.
-- Add payment architecture and webhook safety.
+- Implement the approved provider-neutral payment architecture and webhook safety.
+- Complete legal/accounting review of seller identity, fee disclosure, VAT responsibilities, disputes, consumer rights, and no-refund wording.
+- Define evidence retention, privacy access, and deletion rules.
 - Add admin operational tooling.
