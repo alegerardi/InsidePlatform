@@ -149,4 +149,5 @@ Integration tests require the dedicated test Supabase variables described in `do
 - `docs/05-qr-validation-flow.md`: current entrance-validation architecture.
 - `docs/06-payments-and-fees.md`: approved commercial and fee specification.
 - `docs/07-payment-lifecycle.md`: approved order, reservation, webhook, and dispute lifecycle.
+- `docs/08-payment-schema-proposal.md`: exact Phase 2 provider-neutral schema for review before migrations.
 - `docs/production-readiness-checklist.md`: launch controls and remaining work.

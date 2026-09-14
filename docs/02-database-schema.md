@@ -97,6 +97,8 @@ All sensitive operations must continue to use authenticated server-side checks a
 
 Names below are conceptual until an implementation migration is approved. The model must remain payment-provider neutral.
 
+The exact Phase 2 table, constraint, index, RLS, and RPC proposal is in `08-payment-schema-proposal.md`. This section remains the shorter architectural summary.
+
 ### Event fee configuration
 
 Events require:
